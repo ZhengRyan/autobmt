@@ -1,4 +1,4 @@
-#自动构建评分卡
+##自动构建评分卡
 
 ## 思想碰撞
 
@@ -38,7 +38,7 @@ python setup.py install
 
 2、1步1步拆解自动构建评分卡的步骤：请查看autobmt/examples/tutorial_code.ipynb。里面有详细步骤拆解例子
 
-### 三、训练、自动选变量、自动单调最优分箱、自动构建模型、自动构建评分卡
+## 三、训练、自动选变量、自动单调最优分箱、自动构建模型、自动构建评分卡
 1、Step 1: EDA，整体数据探索性数据分析
 
 2、Step 2: 特征粗筛选
@@ -57,7 +57,7 @@ python setup.py install
 
 9、Step 9: 持久化建模中间结果到excel，方便复盘
 
-### 四、保存的建模结果相关文件说明
+## 四、保存的建模结果相关文件说明
 1、all_data_eda.xlsx：整体数据的EDA情况
 
 2、build_model_log_var_jpg文件夹，最终入模变量的分箱画图，在"build_model_log.xlsx"最后1个sheet也有记录

@@ -26,7 +26,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, accuracy_score, r2_score, recall_score, precision_score, f1_score
 from sklearn.model_selection import train_test_split
-from xgboost.sklearn import XGBRegressor
+#from xgboost.sklearn import XGBRegressor
 from functools import wraps
 
 import autobmt
@@ -324,7 +324,7 @@ def step_evaluate_models(df, features, target, stepname="", is_turner=False):
         models = {
             "lr": LogisticRegression().fit(X_train, y_train),
             "rf": RandomForestRegressor(**rf_params).fit(X_train, y_train),
-            "xgb": XGBRegressor(**xgb_params).fit(X_train, y_train),
+            #"xgb": XGBRegressor(**xgb_params).fit(X_train, y_train),
             # "lightgbm": LGBMRegressor(**lightgbm_params).fit(X_train, y_train),
             # "catboost": CatBoostRegressor(**catboost_params, verbose=False).fit(X_train, y_train)
         }
@@ -336,8 +336,8 @@ def step_evaluate_models(df, features, target, stepname="", is_turner=False):
             data['prob'] = model.predict_proba(df[features])[:, 1]
         elif isinstance(model, RandomForestRegressor):
             data['prob'] = model.predict(df[features])
-        elif isinstance(model, XGBRegressor):
-            data['prob'] = model.predict(df[features])
+        # elif isinstance(model, XGBRegressor):
+        #     data['prob'] = model.predict(df[features])
         # elif isinstance(model, LGBMRegressor):
         #     data['prob'] = model.predict(df[features])
         # elif isinstance(model, CatBoostRegressor):
@@ -388,8 +388,8 @@ def model_predict_evaluate(model, df, features, target, A=404.65547022, B=72.134
     elif isinstance(model, statsmodels.discrete.discrete_model.BinaryResultsWrapper):
         log.info("mode is : statsmodels.discrete.discrete_model.BinaryResultsWrapper")
         data['p'] = model.predict(sm.add_constant(data[features]))
-    elif isinstance(model, XGBRegressor):
-        data['p'] = model.predict(data[features])
+    # elif isinstance(model, XGBRegressor):
+    #     data['p'] = model.predict(data[features])
     # elif isinstance(model, LGBMRegressor):
     #     data['p'] = model.predict(data[features])
     # elif isinstance(model, CatBoostRegressor):
