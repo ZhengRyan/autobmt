@@ -321,7 +321,8 @@ class AutoBuildScoreCard:
         selected_df[self.no_feature_names + selected_features].head(500).to_csv(
             '{}/lr_test_input.csv'.format(self.ml_res_save_path),
             index=False)
-        autobmt.get_auc_ks_psi(output_report_data).to_csv('{}/lr_auc_ks_psi.csv'.format(self.ml_res_save_path),
+        lr_auc_ks_psi = autobmt.get_auc_ks_psi(output_report_data)
+        lr_auc_ks_psi.to_csv('{}/lr_auc_ks_psi.csv'.format(self.ml_res_save_path),
                                                           index=False)
         # stepwise_df.reset_index().to_csv('{}/feature_coef_pvalue_IV_vif_psi_corr.csv'.format(self.ml_res_save_path),
         #                                  index=False)
@@ -378,6 +379,7 @@ class AutoBuildScoreCard:
         time_end = time.time()
         time_c = time_end - time_start
         log.info('*' * 30 + '建模相关结果保存完成！！！保存路径为：{}'.format(self.ml_res_save_path) + '*' * 30)
+        log.info('模型效果：{}'.format(lr_auc_ks_psi))
         log.info('time cost {} s'.format(time_c))
 
         return lr, selected_features

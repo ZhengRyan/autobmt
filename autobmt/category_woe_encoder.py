@@ -2,7 +2,7 @@
 # ! -*- coding: utf-8 -*-
 
 '''
-@File: category_label_encoder.py
+@File: category_woe_encoder.py
 @Author: RyanZheng
 @Email: ryan.zhengrp@gmail.com
 @Created Time on: 2020-09-21

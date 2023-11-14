@@ -2,7 +2,7 @@
 # ! -*- coding: utf-8 -*-
 
 '''
-@File: ryan_lr_tutorial_code.py
+@File: autobmt_lr_tutorial_code.py
 @Author: RyanZheng
 @Email: ryan.zhengrp@gmail.com
 @Created Time on: 2022-07-11
@@ -42,7 +42,7 @@ autobtmodel = AutoBuildScoreCard(datasets=data,  # 训练模型的数据集
                                  )
 
 # ###训练模型
-model, in_model_fea = autobtmodel.fit(empty_threhold=0.95,  # 特征的缺失值大于等于该阀值的特征会被剔除
+model, in_model_fea = autobtmodel.fit(empty_threhold=0.95,  # 特征的缺失值大于该阀值的特征会被剔除
                                       iv_threhold=0.02,  # iv小于该阀值的特征会被剔除
                                       corr_threhold=0.7,  # 相关性大于等于该阀值的特征会被剔除
                                       psi_threhold=0.05  # psi大于等于该阀值的特征会被剔除
