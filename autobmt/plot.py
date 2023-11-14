@@ -62,13 +62,13 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
                 os.makedirs(save_jpg_path, exist_ok=True)
 
             else:
-                save_jpg_path = file_path + '/var_jpg'
+                save_jpg_path = os.path.join(file_path, 'var_jpg')
                 os.makedirs(save_jpg_path, exist_ok=True)
-                file_path = file_path + '/plot_var_bin_summary.xlsx'
+                file_path = os.path.join(file_path, 'plot_var_bin_summary.xlsx')
         else:
-            save_jpg_path = file_path + '/var_jpg'
+            save_jpg_path = os.path.join(file_path, 'var_jpg')
             os.makedirs(save_jpg_path, exist_ok=True)
-            file_path = file_path + '/plot_var_bin_summary.xlsx'
+            file_path = os.path.join(file_path, 'plot_var_bin_summary.xlsx')
 
     for col in cols:
         # 做图
@@ -146,7 +146,7 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
         plt.tight_layout()
 
         if save_jpg_path is not None:  # 判断是否需要保存
-            plt.savefig(save_jpg_path + '/{}.jpg'.format(col), dpi=300)  # dpi控制清晰度
+            plt.savefig(os.path.join(save_jpg_path, '{}.jpg'.format(col)), dpi=300)  # dpi控制清晰度
         # plt.show()
 
     # if save_jpg_path is not None:
@@ -154,7 +154,7 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
     #     worksheet = workbook.add_worksheet(sheet_name)
     #
     #     for i, jpg_name in enumerate(cols):
-    #         worksheet.insert_image('A{}'.format(i * 29 + 3), save_jpg_path + '/{}.jpg'.format(jpg_name),
+    #         worksheet.insert_image('A{}'.format(i * 29 + 3), os.path.join(save_jpg_path, '{}.jpg'.format(jpg_name),
     #                                {'x_scale': 1.5, 'y_scale': 1.5})
     #
     #     workbook.close()
@@ -165,7 +165,7 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
             wb = openpyxl.Workbook()
         sh = wb.create_sheet(sheet_name)
         for i, jpg_name in enumerate(cols):
-            img = Image(save_jpg_path + '/{}.jpg'.format(jpg_name))
+            img = Image(os.path.join(save_jpg_path, '{}.jpg'.format(jpg_name)))
             newsize = (1900, 500)
             img.width, img.height = newsize  # 设置图片的宽和高
             sh.add_image(img, 'A{}'.format(i * 29 + 3))

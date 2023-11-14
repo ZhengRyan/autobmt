@@ -22,6 +22,6 @@ from .scorecard import ScoreCard
 from .plot import plot_var_bin_summary
 
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 VERSION = __version__
 

@@ -90,8 +90,6 @@ df = df.set_index(["make", "year"])["color"].str.split(";", expand=True).reset_i
 print(df)
 del df['make']
 print(pd.get_dummies(df,prefix='', prefix_sep='').groupby(level=0, axis=1).max())
-###https://www.cnblogs.com/traditional/p/11967360.html?ivk_sa=1024320u
-###https://www.5axxw.com/questions/content/s2rhn2
 
 
 df = pd.DataFrame([

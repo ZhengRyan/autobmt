@@ -622,12 +622,13 @@ def var_summary_to_excel(var_summary_df, workbook=None, sheet_name=None):
 if __name__ == "__main__":
     import pandas as pd
     import numpy as np
+    import os
 
     # 创建一个数据
     df = pd.DataFrame(np.random.randn(182, 9), columns=list('ABCDEFGHI'))
     column_list = df.columns
     # 使用XlsxWriter引擎创建一个pandas Excel writer。
-    writer = pd.ExcelWriter("../tests/test_report2excel.xlsx", engine='xlsxwriter')
+    writer = pd.ExcelWriter(os.path.join('..','tests','test_report2excel.xlsx'), engine='xlsxwriter')
 
     df.to_excel(writer, index=False)
 

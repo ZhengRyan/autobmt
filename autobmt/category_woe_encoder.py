@@ -11,6 +11,7 @@
 import json
 import operator
 import sys
+import os
 
 import numpy as np
 import pandas as pd
@@ -133,7 +134,7 @@ if __name__ == "__main__":
     from autobmt.utils import select_features_dtypes
 
     #####读取数据
-    to_model_data_path = '../tests/tutorial_data.csv'
+    to_model_data_path = os.path.join('..','tests','tutorial_data.csv')
     cust_id = 'APP_ID_C'
     target = 'target'  # 目标变量
     data_type = 'type'
@@ -145,7 +146,7 @@ if __name__ == "__main__":
     print('字符特征个数: {}'.format(len(c_cols)))
     print('日期特征个数: {}'.format(len(d_cols)))
 
-    category_2_woe_save_path = "../tests/"
+    category_2_woe_save_path = os.path.join('..','tests')
 
     print("类别变量数据处理前", all_data[c_cols])
     if c_cols:

@@ -14,7 +14,7 @@
 > 
 > pipy包：https://pypi.org/project/autobmt/
 > 
-> 实验数据：实验数据: 链接: https://pan.baidu.com/s/1BRIHH9Wcwy2EZaO5xSgH9w?pwd=tdq5 提取码: tdq5
+> 实验数据：链接: https://pan.baidu.com/s/1BRIHH9Wcwy2EZaO5xSgH9w?pwd=tdq5 提取码: tdq5
 
 ## 一、环境准备
 可以不用单独创建虚拟环境，都是日常常用的python依赖包。需要创建虚拟环境，请参考"五、依赖包安装"

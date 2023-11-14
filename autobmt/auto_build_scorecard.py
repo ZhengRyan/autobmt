@@ -26,7 +26,8 @@ log = autobmt.Logger(level='info', name=__name__).logger
 class AutoBuildScoreCard:
 
     def __init__(self, datasets, fea_names, target, key='key', data_type='type',
-                 no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='./model_result', data_dict=None):
+                 no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='model_result',
+                 data_dict=None):
 
         if data_type not in datasets:
             raise KeyError('train、test数据集标识的字段名不存在！或未进行数据集的划分，请将数据集划分为train、test！！！')
@@ -58,7 +59,7 @@ class AutoBuildScoreCard:
         self.key = key
         self.no_feature_names = no_feature_names
         self.data_dict = data_dict
-        self.ml_res_save_path = ml_res_save_path + '/' + time.strftime('%Y%m%d%H%M%S_%s', time.localtime())
+        self.ml_res_save_path = os.path.join(ml_res_save_path, time.strftime('%Y%m%d%H%M%S_%s', time.localtime()))
 
         os.makedirs(self.ml_res_save_path, exist_ok=True)
 
@@ -99,12 +100,10 @@ class AutoBuildScoreCard:
         fs = autobmt.FeatureSelection(df=self.datasets, target=self.target, exclude_columns=self.no_feature_names,
                                       match_dict=self.data_dict,
                                       params=fs_dic)
-        #selected_df, selected_features, select_log_df, selection_evaluate_log_df, fbfb = fs.select()
         selected_df, selected_features, select_log_df, fbfb = fs.select()
         summary = autobmt.calc_var_summary(
             fbfb.transform(selected_df[selected_df['type'] == 'train'])[selected_features + [self.target]],
             fbfb.export(), target=self.target, need_bin=False)
-        # summary = fs.get_binning_summary  # 获取分箱详情
         autobmt.del_df(self.datasets)
 
         log.info('Step 2: 特征粗筛选结束')
@@ -168,27 +167,6 @@ class AutoBuildScoreCard:
         if 'oot' in self.data_type_ar:
             oot_woe = woetf.transform(oot_bin)
 
-        # if 'oot' in self.data_type_ar:
-        #     bin_data = pd.concat([train_bin, test_bin, oot_bin])
-        # else:
-        #     bin_data = pd.concat([train_bin, test_bin])
-        # dump_model_to_file(bin_data, '{}/bin_data.pkl'.format(self.ml_res_save_path))
-
-        #log.info('Step 5: 获取变量的iv和psi')
-
-        # TODO list：考虑每月和总体的psi比较
-        # # 计算变量的iv和psi以及missing rate
-        # psi_v, frame = psi(train_woe[selected_features], test_woe[selected_features], return_frame=True)
-        # iv_psi_df = pd.DataFrame(train_var_summary.groupby('var_name')['IV'].mean()).merge(pd.DataFrame(psi_v),
-        #                                                                                    left_index=True,
-        #                                                                                    right_index=True).rename(
-        #     columns={0: 'PSI'})
-        # select_log_df.set_index('feature', inplace=True)
-        # iv_psi_missing_df = select_log_df[select_log_df.index.isin(selected_features)][['miss_rate']].merge(iv_psi_df,
-        #                                                                                                     how='right',
-        #                                                                                                     left_index=True,
-        #                                                                                                     right_index=True)
-
         # TODO list：iv_psi_missing_df再加上coef、pvalue、vif
         # TODO list：1、通过稳定性筛选特征 2、由于分箱转woe值后，变量之间的共线性会变强，通过相关性再次筛选特征
 
@@ -198,23 +176,12 @@ class AutoBuildScoreCard:
         else:
             in_model_data = pd.concat([train_woe, test_woe])
 
-        # dump_model_to_file(in_model_data, '{}/in_model_data.pkl'.format(self.ml_res_save_path))
         var_bin_woe = autobmt.fea_woe_dict_format(woetf.export(), fb.export())
-        # sw = StepWise(in_model_data, self.target, selected_features, self.no_feature_names, iv_psi_missing_df,
-        #               var_bin_woe, {})
-        # selected_features, stepwise_df, evaluate_df, stepwise_evaluate_log_df = sw.stepwise_apply()
-        # # selected_features, stepwise_df,stepwise_log_df, evaluate_df, stepwise_evaluate_log_df = sw.run()
 
         # 将woe转化后的数据做逐步回归
         final_data = autobmt.stepwise(train_woe, target=self.target, estimator='ols', direction='both',
                                       criterion='aic',
                                       exclude=self.no_feature_names)
-
-        # # 将选出的变量应用于test/oot数据
-        # final_test = test_woe[final_data.columns]
-        # if 'oot' in self.data_type_ar:
-        #     final_oot = oot_woe[final_data.columns]
-        # print(final_data.shape)  # 逐步回归从31个变量中选出了10个
 
         # 确定建模要用的变量
         selected_features = [fea for fea in final_data.columns if fea not in self.no_feature_names]
@@ -223,8 +190,6 @@ class AutoBuildScoreCard:
         # 用逻辑回归建模
         from sklearn.linear_model import LogisticRegression
 
-        # lr = LogisticRegression()
-        # lr.fit(final_data[selected_features], final_data[self.target])
         while True:  # 循环的目的是保证入模变量的系数都为整
             lr = LogisticRegression()
             lr.fit(final_data[selected_features], final_data[self.target])
@@ -233,30 +198,21 @@ class AutoBuildScoreCard:
                 break
             selected_features = list(set(selected_features) - set(drop_var))
 
-        # # 预测训练和隔月的OOT
-        # pred_train = lr.predict_proba(final_data[selected_features])[:, 1]
-        # pred_test = lr.predict_proba(final_test[selected_features])[:, 1]
-        # if 'oot' in self.data_type_ar:
-        #     pred_oot = lr.predict_proba(final_oot[selected_features])[:, 1]
-        # # 预测训练和隔月的OOT
-
         in_model_data['p'] = lr.predict_proba(in_model_data[selected_features])[:, 1]
-        # dump_model_to_file(in_model_data[self.no_feature_names + selected_features + ['p']],
-        #                    '{}/lr_in_model_data.pkl'.format(self.ml_res_save_path))
 
         ###
         psi_v = autobmt.psi(test_woe[selected_features], train_woe[selected_features])
         psi_v.name = 'train_test_psi'
         train_iv = train_var_summary[['var_name', 'IV']].rename(columns={'IV': 'train_iv'}).drop_duplicates().set_index(
             'var_name')
-        test_iv = train_var_summary[['var_name', 'IV']].rename(columns={'IV': 'test_iv'}).drop_duplicates().set_index(
+        test_iv = test_var_summary[['var_name', 'IV']].rename(columns={'IV': 'test_iv'}).drop_duplicates().set_index(
             'var_name')
         var_miss = select_log_df[['feature', 'cn', 'miss_rate']].drop_duplicates().set_index('feature')
 
         if 'oot' in self.data_type_ar:
             psi_o = autobmt.psi(oot_woe[selected_features], train_woe[selected_features])
             psi_o.name = 'train_oot_psi'
-            oot_iv = train_var_summary[['var_name', 'IV']].rename(columns={'IV': 'oot_iv'}).drop_duplicates().set_index(
+            oot_iv = oot_var_summary[['var_name', 'IV']].rename(columns={'IV': 'oot_iv'}).drop_duplicates().set_index(
                 'var_name')
 
         coef_s = {}
@@ -285,7 +241,7 @@ class AutoBuildScoreCard:
             # class_weight = 'balanced',
             # C=0.1,
             # base_score = 600,
-            # base_odds = 15 ,
+            # odds = 15 ,
             # pdo = 50,
             # rate = 2
         )
@@ -293,45 +249,56 @@ class AutoBuildScoreCard:
         card.fit(final_data[selected_features], final_data[self.target])
 
         log.info('Step 8: 持久化模型，分箱点，woe值，评分卡结构======>开始')
-        autobmt.dump_to_pkl(fb, '{}/fb.pkl'.format(self.ml_res_save_path))
-        autobmt.dump_to_pkl(woetf, '{}/woetf.pkl'.format(self.ml_res_save_path))
-        autobmt.dump_to_pkl(selected_features, '{}/in_model_var.pkl'.format(self.ml_res_save_path))
+        # autobmt.dump_to_pkl(fb, '{}/fb.pkl'.format(self.ml_res_save_path))
+        # autobmt.dump_to_pkl(woetf, '{}/woetf.pkl'.format(self.ml_res_save_path))
+        # autobmt.dump_to_pkl(selected_features, '{}/in_model_var.pkl'.format(self.ml_res_save_path))
+        #
+        # woetf.export(to_json='{}/var_bin_woe.json'.format(self.ml_res_save_path))
+        # woetf.export(to_json='{}/var_bin_woe_format.json'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
+        # fb.export(to_json='{}/var_split_point.json'.format(self.ml_res_save_path), bin_format=False)
+        # fb.export(to_json='{}/var_split_point_format.json'.format(self.ml_res_save_path))
+        # card.export(to_json='{}/scorecard.json'.format(self.ml_res_save_path))
+        #
+        # woetf.export(to_csv='{}/var_bin_woe.csv'.format(self.ml_res_save_path))
+        # woetf.export(to_csv='{}/var_bin_woe_format.csv'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
+        # fb.export(to_csv='{}/var_split_point.csv'.format(self.ml_res_save_path), bin_format=False)
+        # fb.export(to_csv='{}/var_split_point_format.csv'.format(self.ml_res_save_path))
+        # scorecard_structure = card.export(to_dataframe=True)
+        # scorecard_structure.to_csv('{}/scorecard.csv'.format(self.ml_res_save_path), index=False)
+        #
+        # autobmt.dump_to_pkl(lr, '{}/lrmodel.pkl'.format(self.ml_res_save_path))
+        # autobmt.dump_to_pkl(card, '{}/scorecard.pkl'.format(self.ml_res_save_path))
+        # in_model_data['score'] = in_model_data['p'].map(autobmt.to_score)
+        # output_report_data = in_model_data[self.no_feature_names + ['p', 'score']]
 
-        woetf.export(to_json='{}/var_bin_woe.json'.format(self.ml_res_save_path))
-        woetf.export(to_json='{}/var_bin_woe_format.json'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
-        fb.export(to_json='{}/var_split_point.json'.format(self.ml_res_save_path), bin_format=False)
-        fb.export(to_json='{}/var_split_point_format.json'.format(self.ml_res_save_path))
-        card.export(to_json='{}/scorecard.json'.format(self.ml_res_save_path))
+        autobmt.dump_to_pkl(fb, os.path.join(self.ml_res_save_path, 'fb.pkl'))
+        autobmt.dump_to_pkl(woetf, os.path.join(self.ml_res_save_path, 'woetf.pkl'))
+        autobmt.dump_to_pkl(selected_features, os.path.join(self.ml_res_save_path, 'in_model_var.pkl'))
 
-        woetf.export(to_csv='{}/var_bin_woe.csv'.format(self.ml_res_save_path))
-        woetf.export(to_csv='{}/var_bin_woe_format.csv'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
-        fb.export(to_csv='{}/var_split_point.csv'.format(self.ml_res_save_path), bin_format=False)
-        fb.export(to_csv='{}/var_split_point_format.csv'.format(self.ml_res_save_path))
+        woetf.export(to_json=os.path.join(self.ml_res_save_path, 'var_bin_woe.json'))
+        woetf.export(to_json=os.path.join(self.ml_res_save_path, 'var_bin_woe_format.json'), var_bin_woe=var_bin_woe)
+        fb.export(to_json=os.path.join(self.ml_res_save_path, 'var_split_point.json'), bin_format=False)
+        fb.export(to_json=os.path.join(self.ml_res_save_path, 'var_split_point_format.json'))
+        card.export(to_json=os.path.join(self.ml_res_save_path, 'scorecard.json'))
+
+        woetf.export(to_csv=os.path.join(self.ml_res_save_path, 'var_bin_woe.csv'))
+        woetf.export(to_csv=os.path.join(self.ml_res_save_path, 'var_bin_woe_format.csv'), var_bin_woe=var_bin_woe)
+        fb.export(to_csv=os.path.join(self.ml_res_save_path, 'var_split_point.csv'), bin_format=False)
+        fb.export(to_csv=os.path.join(self.ml_res_save_path, 'var_split_point_format.csv'))
         scorecard_structure = card.export(to_dataframe=True)
-        scorecard_structure.to_csv('{}/scorecard.csv'.format(self.ml_res_save_path), index=False)
+        scorecard_structure.to_csv(os.path.join(self.ml_res_save_path, 'scorecard.csv'), index=False)
 
-        # dump_model_to_file(sw.model, '{}/lr_sm_model.pkl'.format(self.ml_res_save_path))
-        # output_model_data = sw.get_output_data
-        # scorecard_structure = sw.get_scorecard_structure()
-
-        autobmt.dump_to_pkl(lr, '{}/lrmodel.pkl'.format(self.ml_res_save_path))
-        autobmt.dump_to_pkl(card, '{}/scorecard.pkl'.format(self.ml_res_save_path))
+        autobmt.dump_to_pkl(lr, os.path.join(self.ml_res_save_path, 'lrmodel.pkl'))
+        autobmt.dump_to_pkl(card, os.path.join(self.ml_res_save_path, 'scorecard.pkl'))
         in_model_data['score'] = in_model_data['p'].map(autobmt.to_score)
         output_report_data = in_model_data[self.no_feature_names + ['p', 'score']]
-        # in_model_data['card_score'] = card.predict(self.datasets)
-        # output_report_data = in_model_data[self.no_feature_names + ['p', 'score', 'card_score']]
 
-        # dump_model_to_file(output_report_data, '{}/output_report_data.pkl'.format(self.ml_res_save_path))
-        output_report_data.to_csv('{}/lr_pred_to_report_data.csv'.format(self.ml_res_save_path), index=False)  #
+        output_report_data.to_csv(os.path.join(self.ml_res_save_path, 'lr_pred_to_report_data.csv'), index=False)
         selected_df[self.no_feature_names + selected_features].head(500).to_csv(
-            '{}/lr_test_input.csv'.format(self.ml_res_save_path),
-            index=False)
+            os.path.join(self.ml_res_save_path, 'lr_test_input.csv'), index=False)
         lr_auc_ks_psi = autobmt.get_auc_ks_psi(output_report_data)
-        lr_auc_ks_psi.to_csv('{}/lr_auc_ks_psi.csv'.format(self.ml_res_save_path),
-                                                          index=False)
-        # stepwise_df.reset_index().to_csv('{}/feature_coef_pvalue_IV_vif_psi_corr.csv'.format(self.ml_res_save_path),
-        #                                  index=False)
-        # dump_model_to_file(scorecard_structure, '{}/scorecard_structure.pkl'.format(self.ml_res_save_path))
+        lr_auc_ks_psi.to_csv(os.path.join(self.ml_res_save_path, 'lr_auc_ks_psi.csv'),
+                             index=False)
         log.info('Step 8: 持久化模型，分箱点，woe值，评分卡结构======>结束')
 
         log.info('Step 9: 持久化建模中间结果到excel，方便复盘')
@@ -344,13 +311,6 @@ class AutoBuildScoreCard:
         # 建模中间结果存储
         # 将模型最终评估结果合并到每一步的评估中
 
-        # final_evaluate_df = merge_rows_one_row_df(evaluate_df, name='lr_', stepname='scorecard_evaluate')
-        # final_step_evaluate_log_df = pd.concat([selection_evaluate_log_df, stepwise_evaluate_log_df, final_evaluate_df],
-        #                                        axis=0).reset_index(drop=True)
-        #
-        # excel_utils.df_to_excel(final_step_evaluate_log_df, '9.step_evaluate')  # 每步筛选的评估结果
-        # excel_utils.df_to_excel(stepwise_df.reset_index(), '10.model_stepwise')  # stepwise模型结果
-        # sw.scorecard_to_excel(scorecard_structure, workbook, 'scorecard_structure')
         excel_utils.df_to_excel(var_info.reset_index().rename(columns={'index': 'var_name'}), '9.var_info')
         excel_utils.df_to_excel(scorecard_structure, 'scorecard_structure')
 
@@ -395,10 +355,11 @@ class AutoBuildScoreCard:
             raise ValueError('需要进行预测的数据集不能为None，请指定数据集！！！')
         if model_path is None:
             raise ValueError('模型路径不能为None，请指定模型文件路径！！！')
-        fb = autobmt.load_from_pkl('{}/fb.pkl'.format(model_path))
-        woetf = autobmt.load_from_pkl('{}/woetf.pkl'.format(model_path))
-        lrmodel = autobmt.load_from_pkl('{}/lrmodel.pkl'.format(model_path))
-        selected_features = autobmt.load_from_pkl('{}/in_model_var.pkl'.format(model_path))
+
+        fb = autobmt.load_from_pkl(os.path.join(model_path, 'fb.pkl'))
+        woetf = autobmt.load_from_pkl(os.path.join(model_path, 'woetf.pkl'))
+        lrmodel = autobmt.load_from_pkl(os.path.join(model_path, 'lrmodel.pkl'))
+        selected_features = autobmt.load_from_pkl(os.path.join(model_path, 'in_model_var.pkl'))
 
         bin_data = fb.transform(to_pred_df)
         woe_data = woetf.transform(bin_data)
