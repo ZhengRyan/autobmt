@@ -59,7 +59,7 @@ class AutoBuildScoreCard:
         self.key = key
         self.no_feature_names = no_feature_names
         self.data_dict = data_dict
-        self.ml_res_save_path = os.path.join(ml_res_save_path, time.strftime('%Y%m%d%H%M%S_%s', time.localtime()))
+        self.ml_res_save_path = os.path.join(ml_res_save_path, time.strftime('%Y%m%d%H%M%S_%S', time.localtime()))
 
         os.makedirs(self.ml_res_save_path, exist_ok=True)
 
