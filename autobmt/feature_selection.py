@@ -435,10 +435,13 @@ class FeatureSelection:
 
     def get_feature_dict(self):
         """通过数据源简称去数据字典中获取数据源的特征名称"""
-        if self.match_dict is not None and isinstance(self.match_dict, dict):
-            model_name_dict = {feature: self.match_dict.get(feature.lower(), "NOT FOUNT") for feature in self.features}
-            model_name_dict_df = pd.DataFrame(
-                {'feature': list(model_name_dict.keys()), 'cn': list(model_name_dict.values())})
+        if self.match_dict is not None and isinstance(self.match_dict, pd.DataFrame):
+            if self.match_dict.columns.isin(['feature', 'cn']).all():
+                model_name_dict_df = pd.DataFrame({'feature': self.features})
+                model_name_dict_df = model_name_dict_df.merge(self.match_dict[['feature','cn']], on='feature', how='left')
+                return model_name_dict_df
+            else:
+                raise KeyError("原始数据字典中没有feature或cn字段，请保证同时有feature字段和cn字段")
         else:
             model_name_dict_df = pd.DataFrame(
                 {'feature': self.features, 'cn': ""})

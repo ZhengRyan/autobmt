@@ -26,7 +26,7 @@ log = autobmt.Logger(level='info', name=__name__).logger
 class AutoBuildScoreCard:
 
     def __init__(self, datasets, fea_names, target, key='key', data_type='type',
-                 no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='./model_result'):
+                 no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='./model_result', data_dict=None):
 
         if data_type not in datasets:
             raise KeyError('train、test数据集标识的字段名不存在！或未进行数据集的划分，请将数据集划分为train、test！！！')
@@ -43,6 +43,10 @@ class AutoBuildScoreCard:
         if target not in datasets:
             raise KeyError('样本中没有目标变量y值！！！')
 
+        if data_dict is not None and isinstance(data_dict, pd.DataFrame):
+            if not data_dict.columns.isin(['feature', 'cn']).all():
+                raise KeyError("原始数据字典中没有feature或cn字段，请保证同时有feature字段和cn字段")
+
         # fea_names = [i for i in fea_names if i != key and i != target]
         fea_names = [i for i in fea_names if i not in no_feature_names]
         log.info('数据集变量个数 : {}'.format(len(fea_names)))
@@ -53,6 +57,7 @@ class AutoBuildScoreCard:
         self.target = target
         self.key = key
         self.no_feature_names = no_feature_names
+        self.data_dict = data_dict
         self.ml_res_save_path = ml_res_save_path + '/' + time.strftime('%Y%m%d%H%M%S_%s', time.localtime())
 
         os.makedirs(self.ml_res_save_path, exist_ok=True)
@@ -92,7 +97,7 @@ class AutoBuildScoreCard:
 
         # TODO 考虑将self.datasets更换为train_data
         fs = autobmt.FeatureSelection(df=self.datasets, target=self.target, exclude_columns=self.no_feature_names,
-                                      match_dict=None,
+                                      match_dict=self.data_dict,
                                       params=fs_dic)
         #selected_df, selected_features, select_log_df, selection_evaluate_log_df, fbfb = fs.select()
         selected_df, selected_features, select_log_df, fbfb = fs.select()
@@ -379,7 +384,7 @@ class AutoBuildScoreCard:
         time_end = time.time()
         time_c = time_end - time_start
         log.info('*' * 30 + '建模相关结果保存完成！！！保存路径为：{}'.format(self.ml_res_save_path) + '*' * 30)
-        log.info('模型效果：{}'.format(lr_auc_ks_psi))
+        log.info('模型效果：\n{}'.format(lr_auc_ks_psi))
         log.info('time cost {} s'.format(time_c))
 
         return lr, selected_features
