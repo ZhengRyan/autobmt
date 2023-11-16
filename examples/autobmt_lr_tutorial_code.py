@@ -20,7 +20,7 @@ from autobmt.auto_build_scorecard import AutoBuildScoreCard
 
 ###TODO 注意修改，读取建模数据
 data = pd.read_csv('./example_data/tutorial_data.csv')
-data_dict = pd.read_excel('./example_data/tutorial_data数据字典.xlsx')  #读取数据字典，非必要
+data_dict = pd.read_excel('./example_data/tutorial_data数据字典.xlsx')  # 读取数据字典，非必要
 ###TODO 注意修改，读取建模数据
 
 ###TODO 注意修改
@@ -40,6 +40,7 @@ autobtmodel = AutoBuildScoreCard(datasets=data,  # 训练模型的数据集
                                  # 数据集中不用于开发模型的特征字段名，即除了x特征的其它字段名
                                  ml_res_save_path=ml_res_save_path,  # 建模相关结果保存路径
                                  data_dict=data_dict,  # 数据字典，非必要，有则添加，无则不要此参数
+                                 AB={'A': 404.65547021957406, 'B': 72.13475204444818},    #自定义的大A，大B；非必要，有默认的
                                  )
 
 # ###训练模型
@@ -70,4 +71,3 @@ model, in_model_fea = autobtmodel.fit(empty_threhold=0.95,  # 特征的缺失值
 # ##**************************************************虚构现实数据例子**************************************************
 # ##**************************************************虚构现实数据例子**************************************************
 # ##**************************************************虚构现实数据例子**************************************************
-

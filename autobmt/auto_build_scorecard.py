@@ -27,7 +27,7 @@ class AutoBuildScoreCard:
 
     def __init__(self, datasets, fea_names, target, key='key', data_type='type',
                  no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='model_result',
-                 data_dict=None):
+                 AB={},data_dict=None):
 
         if data_type not in datasets:
             raise KeyError('train、test数据集标识的字段名不存在！或未进行数据集的划分，请将数据集划分为train、test！！！')
@@ -60,6 +60,7 @@ class AutoBuildScoreCard:
         self.no_feature_names = no_feature_names
         self.data_dict = data_dict
         self.ml_res_save_path = os.path.join(ml_res_save_path, time.strftime('%Y%m%d%H%M%S_%S', time.localtime()))
+        self.AB = AB
 
         os.makedirs(self.ml_res_save_path, exist_ok=True)
 
@@ -244,32 +245,12 @@ class AutoBuildScoreCard:
             # odds = 15 ,
             # pdo = 50,
             # rate = 2
+            AB = self.AB    #自定义的大A，大B
         )
 
         card.fit(final_data[selected_features], final_data[self.target])
 
         log.info('Step 8: 持久化模型，分箱点，woe值，评分卡结构======>开始')
-        # autobmt.dump_to_pkl(fb, '{}/fb.pkl'.format(self.ml_res_save_path))
-        # autobmt.dump_to_pkl(woetf, '{}/woetf.pkl'.format(self.ml_res_save_path))
-        # autobmt.dump_to_pkl(selected_features, '{}/in_model_var.pkl'.format(self.ml_res_save_path))
-        #
-        # woetf.export(to_json='{}/var_bin_woe.json'.format(self.ml_res_save_path))
-        # woetf.export(to_json='{}/var_bin_woe_format.json'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
-        # fb.export(to_json='{}/var_split_point.json'.format(self.ml_res_save_path), bin_format=False)
-        # fb.export(to_json='{}/var_split_point_format.json'.format(self.ml_res_save_path))
-        # card.export(to_json='{}/scorecard.json'.format(self.ml_res_save_path))
-        #
-        # woetf.export(to_csv='{}/var_bin_woe.csv'.format(self.ml_res_save_path))
-        # woetf.export(to_csv='{}/var_bin_woe_format.csv'.format(self.ml_res_save_path), var_bin_woe=var_bin_woe)
-        # fb.export(to_csv='{}/var_split_point.csv'.format(self.ml_res_save_path), bin_format=False)
-        # fb.export(to_csv='{}/var_split_point_format.csv'.format(self.ml_res_save_path))
-        # scorecard_structure = card.export(to_dataframe=True)
-        # scorecard_structure.to_csv('{}/scorecard.csv'.format(self.ml_res_save_path), index=False)
-        #
-        # autobmt.dump_to_pkl(lr, '{}/lrmodel.pkl'.format(self.ml_res_save_path))
-        # autobmt.dump_to_pkl(card, '{}/scorecard.pkl'.format(self.ml_res_save_path))
-        # in_model_data['score'] = in_model_data['p'].map(autobmt.to_score)
-        # output_report_data = in_model_data[self.no_feature_names + ['p', 'score']]
 
         autobmt.dump_to_pkl(fb, os.path.join(self.ml_res_save_path, 'fb.pkl'))
         autobmt.dump_to_pkl(woetf, os.path.join(self.ml_res_save_path, 'woetf.pkl'))

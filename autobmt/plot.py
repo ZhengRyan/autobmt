@@ -8,6 +8,7 @@
 @Created Time on: 2020-10-18
 '''
 import os
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,8 +21,28 @@ from openpyxl.drawing.image import Image
 from .statistics import calc_var_summary
 
 
+def ellipsis_fun(x, decimal=2, ellipsis=16):
+    if re.search(r'\[(.*?) ~ (.*?)\)', str(x)):
+        le = x.split('~')[0]
+        ri = x.split('~')[1]
+        left = re.match(r'\d+.\[(.*?) ', le)
+        right = re.match(r' (.*?)\)', ri)
+        if left:
+            tmp = round(float(left.groups()[0]), decimal)
+            l = f"{le.split('[')[0]}[{tmp} "
+            le = l
+        if right:
+            tmp = round(float(right.groups()[0]), decimal)
+            r = f" {tmp})"
+            ri = r
+
+        return f"{le} ~ {ri}"
+    else:
+        return str(x)[:ellipsis] + '..'
+
+
 def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None, sheet_name='plot_var_bin_summary',
-                         need_bin=False, **kwargs):
+                         need_bin=False, decimal=2, ellipsis=16, **kwargs):
     """
     画变量分箱图
     Args:
@@ -36,7 +57,6 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
     Returns:
 
     """
-    # frame = {'train':tr_df,'test':te_df,'oot':oot_df}
 
     if isinstance(cols, str):
         cols = [cols]
@@ -52,6 +72,7 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
                                                       **kwargs)
     else:
         summary_df_dict = frame
+    summary_num = len(summary_df_dict)
 
     save_jpg_path = None
     if file_path is not None:
@@ -95,42 +116,45 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
                 ax1 = plt.subplot(gs[0, i], sharey=ax1)
 
             df = df[df['var_name'] == col]
+            df['range'] = df['range'].map(lambda x: ellipsis_fun(x, decimal, ellipsis))
 
-            x_PctTotal = np.arange(0, len(df), 1)
-            y_PctTotal = df['total_pct']
+            x_point = np.arange(len(df))
+            y_point = df['total_pct']
 
-            ax1.bar(x_PctTotal, y_PctTotal, color='lightskyblue', alpha=0.4, width=0.5, label='PctTotal')
+            ax1.bar(x_point, y_point, color='Orange', alpha=0.4, width=0.5, label='PctTotal')
+            x_labels = list(df['range'])
+            plt.xticks(np.arange(len(df)), x_labels, fontsize=10, rotation=45)
 
-            for x, y in zip(x_PctTotal, y_PctTotal):
+            for x, y in zip(x_point, y_point):
                 ax1.text(x + 0.05, y + 0.01, str(round(y * 100, 2)) + '%', ha='center', va='bottom', fontsize=12)
             ax1.set_ylabel('total_pct', fontsize=12)
 
-            ax1.set_ylim([0, max(y_PctTotal) + 0.3])
+            ax1.set_ylim([0, max(y_point) + ((max(y_point) - min(y_point)) / len(y_point))])
+            bottom, top = ax1.get_ylim()
             ax2 = ax1.twinx()
-            ax2.plot(x_PctTotal, df['positive_rate'], '-ro', color='red')
+            ax2.plot(x_point, df['positive_rate'], '-ro', color='red')
 
-            for x, y in zip(x_PctTotal, df['positive_rate']):
+            for x, y in zip(x_point, df['positive_rate']):
                 ax2.text(x + 0.05, y, str(round(y * 100, 2)) + '%', ha='center', va='bottom', fontsize=12, color='r')
             ax2.set_ylabel('positive_rate', fontsize=12)
-            ax2.set_ylim([0, max(df['positive_rate']) + 0.01])
+            # ax2.set_ylim([0, max(df['positive_rate']) + 0.01])
+            ax2.set_ylim(
+                [0, max(df['positive_rate']) + ((max(df['positive_rate']) - min(df['positive_rate'])) / len(df))])
 
-            # title_map = {0: 'train', 1: 'test', 2: 'oot'}
-            # plt.title('{}:{}'.format(title_map[i], col))
-            plt.title('{}:{}\nIV: {:.5f}'.format(k, col, df['IV'].iloc[0]))
-            # plt.title('train:' + col)
+            plt.title('{}:{}\nIV: {:.5f}'.format(k, col, df['IV'].iloc[0]), loc='right', fontsize='small')
             # 将数据详情表添加
-            tmp_df = df[['range', 'woe', 'iv', 'total', 'positive_rate']]
-            round_cols = ['woe', 'iv', 'positive_rate']
+            tmp_df = df[['range', 'woe', 'iv', 'total']]
+            round_cols = ['woe', 'iv']
             tmp_df[round_cols] = tmp_df[round_cols].applymap(lambda v: round(v, 4) if pd.notnull(v) else '')
             mpl_table = plt.table(cellText=tmp_df.values, colLabels=tmp_df.columns,
-                                  colWidths=[0.15, 0.1, 0.1, 0.1, 0.15],
-                                  loc=1)  # loc='top'将详情放到顶部
+                                  colWidths=[0.2, 0.1, 0.1, 0.1],
+                                  loc='top')  # loc='top'将详情放到顶部
 
             mpl_table.auto_set_font_size(False)
             mpl_table.set_fontsize(5)
 
-            header_color = '#40466e'
-            row_colors = ['#f1f1f2', 'w']
+            header_color = 'darkorange'
+            row_colors = ['bisque', 'w']
             header_columns = 0
 
             for k, cell in six.iteritems(mpl_table._cells):
@@ -141,12 +165,10 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
                 else:
                     cell.set_facecolor(row_colors[k[0] % len(row_colors)])
 
-            # ax1.text(*(ax1.get_xlim()[0], ax1.get_ylim()[1]), 'IV: {:.5f}'.format(df['iv'].sum()), fontsize='x-large')
-
         plt.tight_layout()
 
         if save_jpg_path is not None:  # 判断是否需要保存
-            plt.savefig(os.path.join(save_jpg_path, '{}.jpg'.format(col)), dpi=300)  # dpi控制清晰度
+            plt.savefig(os.path.join(save_jpg_path, '{}.png'.format(col)), dpi=300,bbox_inches='tight')  # dpi控制清晰度
         # plt.show()
 
     # if save_jpg_path is not None:
@@ -165,8 +187,8 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
             wb = openpyxl.Workbook()
         sh = wb.create_sheet(sheet_name)
         for i, jpg_name in enumerate(cols):
-            img = Image(os.path.join(save_jpg_path, '{}.jpg'.format(jpg_name)))
-            newsize = (1900, 500)
+            img = Image(os.path.join(save_jpg_path, '{}.png'.format(jpg_name)))
+            newsize = (summary_num*700, 600)
             img.width, img.height = newsize  # 设置图片的宽和高
-            sh.add_image(img, 'A{}'.format(i * 29 + 3))
+            sh.add_image(img, 'A{}'.format(i * 35 + 3))
         wb.save(file_path)

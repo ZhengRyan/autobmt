@@ -338,7 +338,7 @@ class FeatureBin(TransformerMixin):
 
         return np.array(restore_category_splits)
 
-    def splits_point_format(self, splits, index=False, ellipsis=None):
+    def splits_point_format(self, splits, index=False, ellipsis=None, decimal=None):
         """
         将分割点格式化，形如：[0.[4 ~ 7), 1.[7 ~ 10)]
         Args:

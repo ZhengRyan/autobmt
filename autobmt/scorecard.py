@@ -40,7 +40,7 @@ ELSE_GROUP = 'else'
 
 class ScoreCard(BaseEstimator):
     def __init__(self, pdo=50, rate=2, odds=15, base_score=600,
-                 card={}, combiner={}, transer=None, **kwargs):
+                 card={}, combiner={}, transer=None, AB={}, **kwargs):
         """
 
         Args:
@@ -58,8 +58,12 @@ class ScoreCard(BaseEstimator):
         self.odds = odds  # odds at base point;;;基准分值对应的odds
         self.base_score = base_score  # base point;;;基准分数
 
-        self.factor = pdo / np.log(rate)  # 大B;;;B=72.13475204444818
-        self.offset = base_score - (pdo / np.log(rate)) * np.log(odds)  # 大A;;;A=404.65547021957406
+        if AB:
+            self.factor = AB['B']
+            self.offset = AB['A']
+        else:
+            self.factor = pdo / np.log(rate)  # 大B;;;B=72.13475204444818
+            self.offset = base_score - (pdo / np.log(rate)) * np.log(odds)  # 大A;;;A=404.65547021957406
 
         self._combiner = combiner
         self.transer = transer
