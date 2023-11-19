@@ -7,5 +7,5 @@ openpyxl>=3.0.7
 bayesian-optimization>=1.1.0
 shap>=0.40.0
 joblib>=0.12
-xgboost>=1.2.0
+xgboost>=1.2.0,<=1.5.0
 lightgbm>=3.1.0
