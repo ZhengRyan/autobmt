@@ -27,7 +27,7 @@ class AutoBuildScoreCard:
 
     def __init__(self, datasets, fea_names, target, key='key', data_type='type',
                  no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='model_result',
-                 AB={},data_dict=None):
+                 AB={}, data_dict=None, positive_corr=False):
 
         if data_type not in datasets:
             raise KeyError('train、test数据集标识的字段名不存在！或未进行数据集的划分，请将数据集划分为train、test！！！')
@@ -61,6 +61,7 @@ class AutoBuildScoreCard:
         self.data_dict = data_dict
         self.ml_res_save_path = os.path.join(ml_res_save_path, time.strftime('%Y%m%d%H%M%S_%S', time.localtime()))
         self.AB = AB
+        self.positive_corr = positive_corr  # 分数与模型预测的概率值是否正相关。默认False，负相关，即概率约高，分数越低
 
         os.makedirs(self.ml_res_save_path, exist_ok=True)
 
@@ -245,7 +246,7 @@ class AutoBuildScoreCard:
             # odds = 15 ,
             # pdo = 50,
             # rate = 2
-            AB = self.AB    #自定义的大A，大B
+            AB=self.AB  # 自定义的大A，大B
         )
 
         card.fit(final_data[selected_features], final_data[self.target])
@@ -271,7 +272,11 @@ class AutoBuildScoreCard:
 
         autobmt.dump_to_pkl(lr, os.path.join(self.ml_res_save_path, 'lrmodel.pkl'))
         autobmt.dump_to_pkl(card, os.path.join(self.ml_res_save_path, 'scorecard.pkl'))
-        in_model_data['score'] = in_model_data['p'].map(autobmt.to_score)
+        if self.AB:
+            in_model_data['score'] = in_model_data['p'].map(
+                lambda x: autobmt.to_score(x, self.AB['A'], self.AB['B'], self.positive_corr))
+        else:
+            in_model_data['score'] = in_model_data['p'].map(lambda x: autobmt.to_score(x, self.positive_corr))
         output_report_data = in_model_data[self.no_feature_names + ['p', 'score']]
 
         output_report_data.to_csv(os.path.join(self.ml_res_save_path, 'lr_pred_to_report_data.csv'), index=False)

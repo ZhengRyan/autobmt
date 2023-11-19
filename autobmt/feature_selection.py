@@ -10,8 +10,11 @@
 
 import numpy as np
 import pandas as pd
+import shap
+from tqdm import tqdm
+from xgboost import XGBClassifier
 
-from .metrics import psi
+from .metrics import psi, get_ks
 from .statistics import calc_iv
 from .transformer import FeatureBin
 from .utils import unpack_tuple, select_features_dtypes, is_continuous
@@ -318,7 +321,10 @@ def select_features_by_corr(df, target='target', by='IV', threshold=0.7, include
         cols = list(df.columns)
 
     if isinstance(by, pd.DataFrame):
-        by = pd.Series(by.iloc[:, 1].values, index=by.iloc[:, 0].values)
+        if by.shape[1] == 1:
+            by = pd.Series(by.iloc[:, 0].values, index=by.index)
+        else:
+            by = pd.Series(by.iloc[:, 1].values, index=by.iloc[:, 0].values)
 
     if not isinstance(by, (str, pd.Series)):
         by = pd.Series(by, index=df.columns)
@@ -384,6 +390,215 @@ from .logger_utils import Logger
 log = Logger(level='info', name=__name__).logger
 
 
+class ShapSelectFeature:
+    def __init__(self, estimator, linear=False, estimator_is_fit_final=False):
+        self.estimator = estimator
+        self.linear = linear
+        self.weight = None
+        self.estimator_is_fit_final = estimator_is_fit_final
+
+    def fit(self, X, y, exclude=None):
+        '''
+
+        Args:
+            X:
+            y:
+            exclude:
+
+        Returns:
+
+        '''
+        if exclude is not None:
+            X = X.drop(columns=exclude)
+        if not self.estimator_is_fit_final:
+            self.estimator.fit(X, y)
+        if self.linear:
+            explainer = shap.LinearExplainer(self.estimator, X)
+        else:
+            estimator = self.estimator.get_booster()
+            temp = estimator.save_raw()[4:]
+            estimator.save_raw = lambda: temp
+            explainer = shap.TreeExplainer(estimator)
+        shap_values = explainer.shap_values(X)
+        shap_abs = np.abs(shap_values)
+        shap_importance_list = shap_abs.mean(0)
+        self.weight = pd.DataFrame(shap_importance_list, index=X.columns, columns=['weight'])
+        return self.weight
+
+
+def feature_select(datasets, fea_names, target, feature_select_method='shap', method_threhold=0.001,
+                   corr_threhold=0.8, psi_threhold=0.1, params={}):
+    '''
+
+    Args:
+        datasets:
+        fea_names:
+        target:
+        feature_select_method:
+        method_threhold:
+        corr_threhold:
+        psi_threhold:
+        params:
+
+    Returns:
+
+    '''
+    dev_data = datasets['dev']
+    nodev_data = datasets['nodev']
+
+    params = {
+        'learning_rate': params.get('learning_rate', 0.05),
+        'n_estimators': params.get('n_estimators', 200),
+        'max_depth': params.get('max_depth', 3),
+        'min_child_weight': params.get('min_child_weight', 5),
+        'subsample': params.get('subsample', 0.7),
+        'colsample_bytree': params.get('colsample_bytree', 0.9),
+        'colsample_bylevel': params.get('colsample_bylevel', 0.7),
+        'gamma': params.get('gamma', 7),
+        'reg_alpha': params.get('reg_alpha', 10),
+        'reg_lambda': params.get('reg_lambda', 10)
+    }
+
+    xgb_clf = XGBClassifier(**params)
+    xgb_clf.fit(dev_data[fea_names], dev_data[target])
+
+    if feature_select_method == 'shap':
+        shap_model = ShapSelectFeature(estimator=xgb_clf, estimator_is_fit_final=True)
+        fea_weight = shap_model.fit(dev_data[fea_names], dev_data[target])
+        fea_weight.sort_values(by='weight', inplace=True)
+        fea_weight = fea_weight[fea_weight['weight'] >= method_threhold]
+        log.info('Shap阈值: {}'.format(method_threhold))
+        log.info('Shap剔除的变量个数: {}'.format(len(fea_names) - fea_weight.shape[0]))
+        log.info('Shap保留的变量个数: {}'.format(fea_weight.shape[0]))
+        fea_names = list(fea_weight.index)
+        log.info('*' * 50 + 'Shap筛选变量' + '*' * 50)
+
+
+    elif feature_select_method == 'feature_importance':
+        fea_weight = pd.DataFrame(list(xgb_clf.get_booster().get_score(importance_type='gain').items()),
+                                  columns=['fea_names', 'weight']
+                                  ).sort_values('weight').set_index('fea_names')
+        fea_weight = fea_weight[fea_weight['weight'] >= method_threhold]
+        log.info('feature_importance阈值: {}'.format(method_threhold))
+        log.info('feature_importance剔除的变量个数: {}'.format(len(fea_names) - fea_weight.shape[0]))
+        fea_names = list(fea_weight.index)
+        log.info('feature_importance保留的变量个数: {}'.format(fea_names))
+        log.info('*' * 50 + 'feature_importance筛选变量' + '*' * 50)
+
+    if corr_threhold:
+        del_fea_list = select_features_by_corr(dev_data[fea_names], by=fea_weight, threshold=corr_threhold)
+        log.info('相关性阈值: {}'.format(corr_threhold))
+        log.info('相关性剔除的变量个数: {}'.format(len(del_fea_list)))
+        fea_names = [i for i in fea_names if i not in del_fea_list]
+        # fea_names = list(set(fea_names) - set(del_fea_list))
+        log.info('相关性保留的变量个数: {}'.format(len(fea_names)))
+        log.info('*' * 50 + '相关性筛选变量' + '*' * 50)
+
+    if psi_threhold:
+        psi_df = psi(dev_data[fea_names], nodev_data[fea_names]).sort_values(0)
+        psi_df = psi_df.reset_index()
+        psi_df = psi_df.rename(columns={'index': 'fea_names', 0: 'psi'})
+        psi_list = psi_df[psi_df.psi < psi_threhold].fea_names.tolist()
+        log.info('PSI阈值: {}'.format(psi_threhold))
+        log.info('PSI剔除的变量个数: {}'.format(len(fea_names) - len(psi_list)))
+        fea_names = [i for i in fea_names if i in psi_list]
+        # fea_names = list(set(fea_names) and set(psi_list))
+        log.info('PSI保留的变量个数: {}'.format(len(fea_names)))
+        log.info('*' * 50 + 'PSI筛选变量' + '*' * 50)
+
+    return fea_names
+
+
+def stepwise_del_feature(datasets, fea_names, target, params={}):
+    '''
+
+    Args:
+        datasets:
+        fea_names:
+        target:
+        params:
+
+    Returns:
+
+    '''
+    log.info("开始逐步删除变量")
+    dev_data = datasets['dev']
+    nodev_data = datasets['nodev']
+    stepwise_del_params = {
+        'learning_rate': params.get('learning_rate', 0.05),
+        'n_estimators': params.get('n_estimators', 200),
+        'max_depth': params.get('max_depth', 3),
+        'min_child_weight': params.get('min_child_weight', 5),
+        'subsample': params.get('subsample', 0.7),
+        'colsample_bytree': params.get('colsample_bytree', 0.9),
+        'colsample_bylevel': params.get('colsample_bylevel', 0.7),
+        'gamma': params.get('gamma', 7),
+        'reg_alpha': params.get('reg_alpha', 10),
+        'reg_lambda': params.get('reg_lambda', 10)
+    }
+
+    xgb_clf = XGBClassifier(**stepwise_del_params)
+    xgb_clf.fit(dev_data[fea_names], dev_data[target])
+
+    pred_test = xgb_clf.predict_proba(nodev_data[fea_names])[:, 1]
+    pred_train = xgb_clf.predict_proba(dev_data[fea_names])[:, 1]
+
+    test_ks = get_ks(nodev_data[target], pred_test)
+    train_ks = get_ks(dev_data[target], pred_train)
+    log.info('test_ks is : {}'.format(test_ks))
+    log.info('train_ks is : {}'.format(train_ks))
+
+    train_number, oldks, del_list = 0, test_ks, list()
+    log.info('train_number: {}, test_ks: {}'.format(train_number, test_ks))
+
+    # while True:
+    #     flag = True
+    #     for fea_name in tqdm(fea_names):
+    #         print('变量{}进行逐步：'.format(fea_name))
+    #         names = [fea for fea in fea_names if fea_name != fea]
+    #         print('变量names is：', names)
+    #         xgb_clf.fit(dev_data[names], dev_data[target])
+    #         train_number += 1
+    #         pred_test = xgb_clf.predict_proba(nodev_data[names])[:, 1]
+    #         test_ks = get_ks(nodev_data[target], pred_test)
+    #         if test_ks >= oldks:
+    #             oldks = test_ks
+    #             flag = False
+    #             del_list.append(fea_name)
+    #             log.info(
+    #                 '等于或优于之前结果 train_number: {}, test_ks: {} by feature: {}'.format(train_number, test_ks, fea_name))
+    #             fea_names = names
+    #     if flag:
+    #         print('=====================又重新逐步==========')
+    #         break
+    #     log.info("结束逐步删除变量 train_number: %s, test_ks: %s del_list: %s" % (train_number, oldks, del_list))
+    #     print('oldks is ：',oldks)
+    #     print('fea_names is : ',fea_names)
+
+    for fea_name in tqdm(fea_names):
+        names = [fea for fea in fea_names if fea_name != fea]
+        xgb_clf.fit(dev_data[names], dev_data[target])
+        train_number += 1
+        pred_test = xgb_clf.predict_proba(nodev_data[names])[:, 1]
+        test_ks = get_ks(nodev_data[target], pred_test)
+        if test_ks >= oldks:
+            oldks = test_ks
+            del_list.append(fea_name)
+            log.info(
+                '等于或优于之前结果 train_number: {}, test_ks: {} by feature: {}'.format(train_number, test_ks, fea_name))
+            fea_names = names
+    log.info("结束逐步删除变量 train_number: %s, test_ks: %s del_list: %s" % (train_number, oldks, del_list))
+
+    ########################
+    log.info('逐步剔除的变量个数: {}'.format(del_list))
+    fea_names = [i for i in fea_names if i not in del_list]
+    # fea_names = list(set(fea_names) - set(del_list))
+    log.info('逐步保留的变量个数: {}'.format(len(fea_names)))
+    log.info('*' * 50 + '逐步筛选变量' + '*' * 50)
+
+    return del_list, fea_names
+
+
 class FeatureSelection:
     def __init__(self, df, target='target', data_type='type',
                  exclude_columns=['key', 'target', 'apply_time', 'type'], params=None,
@@ -438,7 +653,8 @@ class FeatureSelection:
         if self.match_dict is not None and isinstance(self.match_dict, pd.DataFrame):
             if self.match_dict.columns.isin(['feature', 'cn']).all():
                 model_name_dict_df = pd.DataFrame({'feature': self.features})
-                model_name_dict_df = model_name_dict_df.merge(self.match_dict[['feature','cn']], on='feature', how='left')
+                model_name_dict_df = model_name_dict_df.merge(self.match_dict[['feature', 'cn']], on='feature',
+                                                              how='left')
                 return model_name_dict_df
             else:
                 raise KeyError("原始数据字典中没有feature或cn字段，请保证同时有feature字段和cn字段")

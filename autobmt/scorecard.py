@@ -53,14 +53,16 @@ class ScoreCard(BaseEstimator):
             transer (autobmt.WoeTransformer): 变量分箱对应的woe值
             **kwargs:
         """
+        ##实际意义为当比率为1/15，输出基准评分600，当比率为基准比率2倍时，1/7.5，基准分下降50分，为550
         self.pdo = pdo  # point double odds;;;当odds增加一倍，评分增加的分数
         self.rate = rate  #
         self.odds = odds  # odds at base point;;;基准分值对应的odds
         self.base_score = base_score  # base point;;;基准分数
+        self.AB = AB    #自定义的大A，大B
 
         if AB:
-            self.factor = AB['B']
-            self.offset = AB['A']
+            self.factor = self.AB['B']
+            self.offset = self.AB['A']
         else:
             self.factor = pdo / np.log(rate)  # 大B;;;B=72.13475204444818
             self.offset = base_score - (pdo / np.log(rate)) * np.log(odds)  # 大A;;;A=404.65547021957406

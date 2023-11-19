@@ -26,7 +26,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, accuracy_score, r2_score, recall_score, precision_score, f1_score
 from sklearn.model_selection import train_test_split
-#from xgboost.sklearn import XGBRegressor
+# from xgboost.sklearn import XGBRegressor
 from functools import wraps
 
 import autobmt
@@ -106,25 +106,38 @@ def get_splitted_data(df_selected, target, selected_features):
 #     result = 1200 - result
 #     return result
 
-def to_score(x, A=404.65547022, B=72.1347520444):
+def to_score(x, A=404.65547021957406, B=72.13475204444818, positive_corr=False):
     """
     概率值转分
     Args:
         x (float): 模型预测的概率值
-        pdo=50;rate=2;odds=15;base_score=600
+        base_score=600
+        odds=15
+        pdo=50
+        rate=2
+        #实际意义为当比率为1/15，输出基准评分600，当比率为基准比率2倍时，1/7.5，基准分下降50分，为550
         A (float): 评分卡offset；；；offset = base_score - (pdo / np.log(rate)) * np.log(odds)
         B (float): 评分卡factor；；；factor = pdo / np.log(rate)
+        positive_corr: 分数与模型预测的概率值是否正相关。默认False，负相关，即概率约高，分数越低
 
     Returns:
         score (float): 标准评分
     """
     result = round(A - B * math.log(x / (1 - x)))
 
-    # if result < 300:
-    #     result = 300
-    # if result > 900:
-    #     result = 900
-    return result
+    if positive_corr:
+        if result < 0:
+            result = 0
+        if result > 1200:
+            result = 1200
+        result = 1200 - result
+        return result
+    else:
+        if result < 300:
+            result = 300
+        if result > 900:
+            result = 900
+        return result
 
 
 def score2p(x, A=404.65547022, B=72.1347520444):
@@ -324,7 +337,7 @@ def step_evaluate_models(df, features, target, stepname="", is_turner=False):
         models = {
             "lr": LogisticRegression().fit(X_train, y_train),
             "rf": RandomForestRegressor(**rf_params).fit(X_train, y_train),
-            #"xgb": XGBRegressor(**xgb_params).fit(X_train, y_train),
+            # "xgb": XGBRegressor(**xgb_params).fit(X_train, y_train),
             # "lightgbm": LGBMRegressor(**lightgbm_params).fit(X_train, y_train),
             # "catboost": CatBoostRegressor(**catboost_params, verbose=False).fit(X_train, y_train)
         }
@@ -483,7 +496,7 @@ def save_json(res_dict, file, indent=4):
         file = open(file, 'w')
 
     with file as f:
-        json.dump(res_dict, f, ensure_ascii = False, indent = indent)
+        json.dump(res_dict, f, ensure_ascii=False, indent=indent)
 
 
 def load_json(file):
