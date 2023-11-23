@@ -450,6 +450,7 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
         'learning_rate': params.get('learning_rate', 0.05),
         'n_estimators': params.get('n_estimators', 200),
         'max_depth': params.get('max_depth', 3),
+        #'min_child_weight': params.get('min_child_weight', max(round(len(dev_data) * 0.01), 50)),
         'min_child_weight': params.get('min_child_weight', 5),
         'subsample': params.get('subsample', 0.7),
         'colsample_bytree': params.get('colsample_bytree', 0.9),
@@ -486,7 +487,7 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
         log.info('*' * 50 + 'feature_importance筛选变量' + '*' * 50)
 
     if corr_threhold:
-        del_fea_list = select_features_by_corr(dev_data[fea_names], by=fea_weight, threshold=corr_threhold)
+        _, del_fea_list = select_features_by_corr(dev_data[fea_names], by=fea_weight, threshold=corr_threhold,return_drop=True)
         log.info('相关性阈值: {}'.format(corr_threhold))
         log.info('相关性剔除的变量个数: {}'.format(len(del_fea_list)))
         fea_names = [i for i in fea_names if i not in del_fea_list]
@@ -509,7 +510,7 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
     return fea_names
 
 
-def stepwise_del_feature(datasets, fea_names, target, params={}):
+def stepwise_del_feature(model , datasets, fea_names, target, params={}):
     '''
 
     Args:
@@ -524,24 +525,24 @@ def stepwise_del_feature(datasets, fea_names, target, params={}):
     log.info("开始逐步删除变量")
     dev_data = datasets['dev']
     nodev_data = datasets['nodev']
-    stepwise_del_params = {
-        'learning_rate': params.get('learning_rate', 0.05),
-        'n_estimators': params.get('n_estimators', 200),
-        'max_depth': params.get('max_depth', 3),
-        'min_child_weight': params.get('min_child_weight', 5),
-        'subsample': params.get('subsample', 0.7),
-        'colsample_bytree': params.get('colsample_bytree', 0.9),
-        'colsample_bylevel': params.get('colsample_bylevel', 0.7),
-        'gamma': params.get('gamma', 7),
-        'reg_alpha': params.get('reg_alpha', 10),
-        'reg_lambda': params.get('reg_lambda', 10)
-    }
+    # stepwise_del_params = {
+    #     'learning_rate': params.get('learning_rate', 0.05),
+    #     'n_estimators': params.get('n_estimators', 200),
+    #     'max_depth': params.get('max_depth', 3),
+    #     'min_child_weight': params.get('min_child_weight', max(round(len(dev_data) * 0.01), 50)),
+    #     'subsample': params.get('subsample', 0.7),
+    #     'colsample_bytree': params.get('colsample_bytree', 0.9),
+    #     'colsample_bylevel': params.get('colsample_bylevel', 0.7),
+    #     'gamma': params.get('gamma', 7),
+    #     'reg_alpha': params.get('reg_alpha', 10),
+    #     'reg_lambda': params.get('reg_lambda', 10)
+    # }
 
-    xgb_clf = XGBClassifier(**stepwise_del_params)
-    xgb_clf.fit(dev_data[fea_names], dev_data[target])
+    #xgb_clf = XGBClassifier(**stepwise_del_params)
+    model.fit(dev_data[fea_names], dev_data[target])
 
-    pred_test = xgb_clf.predict_proba(nodev_data[fea_names])[:, 1]
-    pred_train = xgb_clf.predict_proba(dev_data[fea_names])[:, 1]
+    pred_test = model.predict_proba(nodev_data[fea_names])[:, 1]
+    pred_train = model.predict_proba(dev_data[fea_names])[:, 1]
 
     test_ks = get_ks(nodev_data[target], pred_test)
     train_ks = get_ks(dev_data[target], pred_train)
@@ -577,9 +578,9 @@ def stepwise_del_feature(datasets, fea_names, target, params={}):
 
     for fea_name in tqdm(fea_names):
         names = [fea for fea in fea_names if fea_name != fea]
-        xgb_clf.fit(dev_data[names], dev_data[target])
+        model.fit(dev_data[names], dev_data[target])
         train_number += 1
-        pred_test = xgb_clf.predict_proba(nodev_data[names])[:, 1]
+        pred_test = model.predict_proba(nodev_data[names])[:, 1]
         test_ks = get_ks(nodev_data[target], pred_test)
         if test_ks >= oldks:
             oldks = test_ks

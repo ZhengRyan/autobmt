@@ -18,8 +18,9 @@ import joblib
 import pickle
 import numpy as np
 import pandas as pd
+from lightgbm import LGBMClassifier
 from xgboost import XGBClassifier
-import xgboost as xgb
+import lightgbm as lgb
 
 import autobmt
 
@@ -30,7 +31,7 @@ from .logger_utils import Logger
 log = Logger(level='info', name=__name__).logger
 
 
-class AutoBuildTreeModel():
+class AutoBuildTreeModelLGB():
     def __init__(self, datasets, fea_names, target, key='key', data_type='type',
                  no_feature_names=['key', 'target', 'apply_time', 'type'], ml_res_save_path='model_result',
                  AB={}, positive_corr=False):
@@ -125,9 +126,11 @@ class AutoBuildTreeModel():
 
         if is_auto_tune_params:
             log.info('需要进行自动调参')
-            best_model = autobmt.classifiers_model_auto_tune_params(
-                train_data=(dev_data[fea_names], dev_data[self.target]),
-                test_data=(nodev_data[fea_names], nodev_data[self.target]))
+            best_model = autobmt.classifiers_model_auto_tune_params(models=['lgb'],
+                                                                    train_data=(
+                                                                        dev_data[fea_names], dev_data[self.target]),
+                                                                    test_data=(
+                                                                        nodev_data[fea_names], nodev_data[self.target]))
             params = best_model.get_params()
 
         if is_stepwise_del_feature:
@@ -183,21 +186,22 @@ class AutoBuildTreeModel():
 
         ##############
         log.info('*' * 30 + '建模相关结果开始保存！！！' + '*' * 30)
-        joblib.dump(best_model._Booster, os.path.join(self.ml_res_save_path, 'xgb.ml'))
-        joblib.dump(best_model, os.path.join(self.ml_res_save_path, 'xgb_sk.ml'))
-        autobmt.dump_to_pkl(best_model._Booster, os.path.join(self.ml_res_save_path, 'xgb.pkl'))
-        autobmt.dump_to_pkl(best_model, os.path.join(self.ml_res_save_path, 'xgb_sk.pkl'))
-        json.dump(best_model.get_params(), open(os.path.join(self.ml_res_save_path, 'xgb.params'), 'w'))
-        best_model._Booster.dump_model(os.path.join(self.ml_res_save_path, 'xgb.txt'))
-        pd.DataFrame([res_dict]).to_csv(os.path.join(self.ml_res_save_path, 'xgb_auc_ks_psi.csv'), index=False)
+        joblib.dump(best_model._Booster, os.path.join(self.ml_res_save_path, 'lgb.ml'))
+        joblib.dump(best_model, os.path.join(self.ml_res_save_path, 'lgb_sk.ml'))
+        autobmt.dump_to_pkl(best_model._Booster, os.path.join(self.ml_res_save_path, 'lgb.pkl'))
+        autobmt.dump_to_pkl(best_model, os.path.join(self.ml_res_save_path, 'lgb_sk.pkl'))
+        json.dump(best_model.get_params(), open(os.path.join(self.ml_res_save_path, 'lgb.params'), 'w'))
+        best_model._Booster.save_model(os.path.join(self.ml_res_save_path, 'lgb.txt'))
+        json.dump(best_model._Booster.dump_model(), open(os.path.join(self.ml_res_save_path, 'lgb.json'), 'w'))
+        pd.DataFrame([res_dict]).to_csv(os.path.join(self.ml_res_save_path, 'lgb_auc_ks_psi.csv'), index=False)
 
-        pd.DataFrame(list(best_model._Booster.get_fscore().items()),
+        pd.DataFrame(list(tuple(zip(best_model._Booster.feature_name(), best_model._Booster.feature_importance()))),
                      columns=['fea_names', 'weight']
                      ).sort_values('weight', ascending=False).set_index('fea_names').to_csv(
-            os.path.join(self.ml_res_save_path, 'xgb_featureimportance.csv'))
+            os.path.join(self.ml_res_save_path, 'lgb_featureimportance.csv'))
 
         nodev_data[self.no_feature_names + fea_names].head(500).to_csv(
-            os.path.join(self.ml_res_save_path, 'xgb_test_input.csv'),
+            os.path.join(self.ml_res_save_path, 'lgb_test_input.csv'),
             index=False)
 
         ##############pred to score
@@ -207,7 +211,7 @@ class AutoBuildTreeModel():
             lambda x: autobmt.to_score(x, self.AB['A'], self.AB['B'], self.positive_corr))
         ##############pred to score
 
-        df_pred_nodev.append(df_pred_dev).to_csv(os.path.join(self.ml_res_save_path, 'xgb_pred_to_report_data.csv'),
+        df_pred_nodev.append(df_pred_dev).to_csv(os.path.join(self.ml_res_save_path, 'lgb_pred_to_report_data.csv'),
                                                  index=False)
 
         log.info('*' * 30 + '建模相关结果保存完成！！！保存路径为：{}'.format(self.ml_res_save_path) + '*' * 30)
@@ -222,16 +226,16 @@ class AutoBuildTreeModel():
             raise ValueError('模型路径不能为None，请指定模型文件路径！！！')
 
         try:
-            model = joblib.load(os.path.join(model_path, 'xgb.ml'))
+            model = joblib.load(os.path.join(model_path, 'lgb.ml'))
         except:
-            model = pickle.load(open(os.path.join(model_path, 'xgb.pkl'), 'rb'))
+            model = pickle.load(open(os.path.join(model_path, 'lgb.pkl'), 'rb'))
 
         try:
-            model_feature_names = model.feature_names
+            model_feature_names = model.feature_name()
         except:
-            model_feature_names = model.get_booster().feature_names
-            model = model.get_booster()
+            model_feature_names = model._Booster.feature_name()
+            model = model._Booster
 
-        to_pred_df['p'] = model.predict(xgb.DMatrix(to_pred_df[model_feature_names]))
+        to_pred_df['p'] = model.predict(to_pred_df[model_feature_names])
 
         return to_pred_df

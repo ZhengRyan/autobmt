@@ -2,7 +2,7 @@
 # ! -*- coding: utf-8 -*-
 
 '''
-@File: autobmt_treemodel_tutorial_code.py
+@File: autobmt_treemodel_tutorial_code_LGB.py
 @Author: RyanZheng
 @Email: ryan.zhengrp@gmail.com
 @Created Time on: 2022-07-11
@@ -10,7 +10,7 @@
 
 import pandas as pd
 
-from autobmt.auto_build_tree_model import AutoBuildTreeModel
+from autobmt.auto_build_tree_model_lgb import AutoBuildTreeModelLGB
 
 ##**************************************************虚构现实数据例子**************************************************
 ##**************************************************虚构现实数据例子**************************************************
@@ -24,14 +24,14 @@ data_dict = pd.read_excel('./example_data/tutorial_data数据字典.xlsx')  # �
 ###TODO 注意修改，读取建模数据
 
 ###TODO 注意修改
-client_batch = 'TT00p1'
+client_batch = 'TT00p2'
 key, target, data_type = 'APP_ID_C', 'target', 'type'  # key是主键字段名，target是目标变量y的字段名，data_type是train、test数据集标识的字段名
 ml_res_save_path = './example_model_result/{}'.format(client_batch)  # 模型结果保存的位置
 ###TODO 注意修改
 
 ###TODO 下面代码基本可以不用动
 # 初始化
-autobtmodel = AutoBuildTreeModel(datasets=data,  # 训练模型的数据集
+autobtmodel = AutoBuildTreeModelLGB(datasets=data,  # 训练模型的数据集
                                  fea_names=list(data.columns),  # 数据集的字段名
                                  target=target,  # 目标变量y字段名
                                  key=key,  # 主键字段名
@@ -65,12 +65,12 @@ model, in_model_fea = autobtmodel.fit(is_feature_select=True,  # 特征筛选
 # ###TODO 注意修改，读取未来需要预测的数据
 #
 # # 未来有新数据过来，使用训练好的模型进行预测
-# offline_pred_res = AutoBuildTreeModel.predict(to_pred_df=data,  # 未来需要预测的数据，id+特征即可
-#                                               model_path='./example_model_result/TT00p1/20231119105732_32',
+# offline_pred_res = AutoBuildTreeModelLGB.predict(to_pred_df=data,  # 未来需要预测的数据，id+特征即可
+#                                               model_path='./example_model_result/TT00p2/20231119105732_32',
 #                                               # 训练好的模型路径
 #                                               )
 # offline_pred_res.to_csv(
-#     './example_model_result/TT00p1/20231119105732_32/offline_pred_res.csv',
+#     './example_model_result/TT00p2/20231119105732_32/offline_pred_res.csv',
 #     index=False)
 #
 # ##**************************************************虚构现实数据例子**************************************************
