@@ -20,7 +20,6 @@ from autobmt.auto_build_tree_model_lgb import AutoBuildTreeModelLGB
 
 ###TODO 注意修改，读取建模数据
 data = pd.read_csv('./example_data/tutorial_data.csv')
-data_dict = pd.read_excel('./example_data/tutorial_data数据字典.xlsx')  # 读取数据字典，非必要
 ###TODO 注意修改，读取建模数据
 
 ###TODO 注意修改

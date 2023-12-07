@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import openpyxl
 import pandas as pd
+import seaborn as sns
 import six
 from matplotlib import gridspec
 from openpyxl.drawing.image import Image
@@ -195,6 +196,24 @@ def plot_var_bin_summary(frame, cols, target='target', by='type', file_path=None
             img.width, img.height = newsize  # 设置图片的宽和高
             sh.add_image(img, 'A{}'.format(i * 35 + 3))
         wb.save(file_path)
+
+
+def plot_describe(df, by_col='p', title='model distribution'):
+    try:
+        sns.displot(df[by_col], color='#ff8080', bins=20,
+                    kde_kws={"lw": 2.5, 'linestyle': '--'})
+    except RuntimeError as rte:
+        if str(rte).startswith("Selected KDE bandwidth is 0. Cannot estiamte density."):
+            sns.displot(df[by_col], color='#ff8080',
+                        bins=20, kde_kws={"lw": 2.5, 'linestyle': '--', 'bw': 1})
+        else:
+            raise rte
+    tem = df[by_col].describe().reset_index()
+    table_ = plt.table(cellText=[[round(x, 4)] for x in tem[by_col].tolist()],
+                       colWidths=[0.1] * 1, rowLabels=tem['index'].tolist(), loc='right')
+    table_.set_fontsize(15)
+    table_.scale(1.9, 2.265)
+    plt.title(f'{title} by {by_col}')
 
 
 def get_optimal_cutoff(fpr_recall, tpr_precision, threshold, is_f1=False):

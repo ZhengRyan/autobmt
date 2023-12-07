@@ -88,13 +88,23 @@ class AutoBuildScoreCard:
         log.info('Step 2: 特征粗筛选开始')
         # 进行特征初步选择
         # 分箱方法支持 dt、chi、equal_freq、kmeans
+        # fs_dic = {
+        #     "empty": {'threshold': empty_threhold},
+        #     # "const": {'threshold': 0.95},
+        #     "psi": {'threshold': psi_threhold},
+        #     "iv": {'threshold': iv_threhold},
+        #     # "iv_diff": {'threshold': dev_nodev_iv_diff_threhold},
+        #     "corr": {'threshold': corr_threhold},
+        #
+        # }
         fs_dic = {
             "empty": {'threshold': empty_threhold},
             # "const": {'threshold': 0.95},
-            "psi": {'threshold': psi_threhold},
+
             "iv": {'threshold': iv_threhold},
             # "iv_diff": {'threshold': dev_nodev_iv_diff_threhold},
             "corr": {'threshold': corr_threhold},
+            "psi": {'threshold': psi_threhold},
 
         }
 
@@ -111,8 +121,8 @@ class AutoBuildScoreCard:
         log.info('Step 2: 特征粗筛选结束')
 
         log.info('Step 3: 对剩下的变量调用最优分箱')
-        log.info('剩下的变量个数 : '.format(len(selected_features)))
-        log.info('剩下的变量 : '.format(selected_features))
+        log.info('剩下的变量个数 : {}'.format(len(selected_features)))
+        log.info('剩下的变量 : {}'.format(selected_features))
 
         # train_data = selected_df[selected_df['type'] == 'train']
 

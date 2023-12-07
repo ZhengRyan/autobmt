@@ -86,7 +86,7 @@ def get_auc_ks_psi(df, target='target', pred='p'):
     return pd.DataFrame([res_dict])
 
 
-def psi(no_base, base, return_frame=False, featurebin = None):
+def psi(no_base, base, return_frame=False, featurebin=None):
     """
     计算psi值
     Args:
@@ -103,8 +103,8 @@ def psi(no_base, base, return_frame=False, featurebin = None):
             from .transformer import FeatureBin
             featurebin = FeatureBin().manual_bin(featurebin)
 
-            no_base = featurebin.transform(no_base, labels = True)
-        base = featurebin.transform(base, labels = True)
+            no_base = featurebin.transform(no_base, labels=True)
+        base = featurebin.transform(base, labels=True)
 
     psi = list()
     frame = list()
@@ -199,3 +199,44 @@ def BIC(y_pred, y, k, llf=None):
         llf = np.log(SSE(y_pred, y))
 
     return np.log(n) * k - 2 * llf
+
+
+def get_metrics_info(df, by=['apply_mon'], feature_type='td', target='target', data_type='type',
+                     apply_time='apply_time'):
+    if data_type not in df.columns:
+        data_type = 'None'
+        df[data_type] = 'None'
+    auc_ks = df.groupby(by).apply(
+        lambda df_tmp: pd.Series({
+            'auc': get_auc(df_tmp[target], df_tmp[feature_type]),
+            'ks': get_ks(df_tmp[target], df_tmp[feature_type]),
+            '正样本': sum(df_tmp[target]),
+            '总数': len(df_tmp),
+            '正样本占比': np.mean(df_tmp[target]),
+            'apply_time': f"{df_tmp[apply_time].min()}至{df_tmp[apply_time].max()}",
+            'data_type': f"{list(set(df_tmp[data_type]))}",
+        })
+    )
+    all_auc_ks = pd.DataFrame([{'all': 'all', 'auc': get_auc(df[target], df[feature_type]),
+                                'ks': get_ks(df[target], df[feature_type]), '正样本': sum(df[target]), '总数': len(df),
+                                '正样本占比': np.mean(df[target]),
+                                'apply_time': f"{df[apply_time].min()}至{df[apply_time].max()}",
+                                'data_type': f"{list(set(df[data_type]))}", }]).set_index('all')
+    all_auc_ks.index.name = auc_ks.index.name
+    res = auc_ks.append(all_auc_ks)
+    res.index.name = feature_type
+    return res
+
+
+def psi_by_col(df, by_col='apply_mon'):
+    by_col_v = sorted(list(set(df[by_col])))
+    by_col_psi_lis = []
+    for n, j in enumerate(by_col_v):
+        by_col_d = df[df[by_col] == j]
+        ###计算PSI
+        by_col_psi = psi(by_col_d[['score']], df[['score']], )
+        by_col_psi.name = f"{j}_PSI"
+        by_col_psi_lis.append(by_col_psi)
+    by_col_psi_df = pd.DataFrame(by_col_psi_lis).T
+    by_col_psi_df['MaxPSI'] = by_col_psi_df.max(axis=1)
+    return by_col_psi_df

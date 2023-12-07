@@ -123,6 +123,10 @@ def to_score(x, A=404.65547021957406, B=72.13475204444818, positive_corr=False):
     Returns:
         score (float): 标准评分
     """
+    if x <= 0:
+        x = 0.000001
+    elif x >= 1:
+        x = 0.999999
     result = round(A - B * math.log(x / (1 - x)))
 
     if positive_corr:

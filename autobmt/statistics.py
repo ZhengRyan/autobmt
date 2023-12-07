@@ -16,7 +16,7 @@ import statsmodels.api as sm
 from joblib import Parallel, delayed
 
 import autobmt
-from .metrics import psi
+from .metrics import psi, get_auc, get_ks
 from .utils import is_continuous, to_ndarray, np_count, support_dataframe, split_points_to_bin
 
 
@@ -530,7 +530,6 @@ def get_iv_psi(df, feature_list=[], target='target', by_col='apply_mon', only_ps
                 month_IV = pd.concat([month_IV, pd.DataFrame([iv_all]).T.rename(columns={0: 'IV'})], axis=1)
             month_IV = pd.concat([month_IV, pd.DataFrame([iv]).T.rename(columns={0: f"{j}_IV"})], axis=1)
         ###计算PSI
-        # by_col_psi = psi(dev[feature_list], by_col_d[feature_list])
         by_col_psi = psi(by_col_d[feature_list], dev[feature_list])
         by_col_psi.name = f"{j}_PSI"
         month_PSI_lis.append(by_col_psi)
@@ -545,3 +544,361 @@ def get_iv_psi(df, feature_list=[], target='target', by_col='apply_mon', only_ps
 
     res = pd.concat([month_IV, month_PSI], axis=1)
     return res.sort_values(by='MaxPSI', ascending=False, )
+
+
+from IPython.display import display
+from pandas._libs import lib
+from pandas.core.dtypes.generic import ABCSeries
+from pandas.core.groupby import Grouper
+from pandas.core.indexes.api import Index
+import warnings
+
+is_scalar = lib.is_scalar
+
+warnings.filterwarnings('ignore')
+pd.set_option('display.max_rows', None)  # 设置行数为无限制
+pd.set_option('display.max_columns', None)  # 设置列数为无限制
+
+
+def _convert_by(by):
+    if by is None:
+        by = []
+    elif (
+        is_scalar(by)
+        or isinstance(by, (np.ndarray, Index, ABCSeries, Grouper))
+        or hasattr(by, "__call__")
+    ):
+        by = [by]
+    else:
+        by = list(by)
+    return by
+
+
+# # 正负样本在不同数据集不同数据集_不同设备的匹配率===一体
+
+def get_pivot_table(df, index_col_name=None, columns_name=None, target='target'):
+    index_col_name = _convert_by(index_col_name)
+    if target not in df:
+        raise KeyError('数据中目标变量y值名称错误！！！')
+    df['dfid'] = 1
+
+    zb = pd.pivot_table(df, values='dfid', index=index_col_name, columns=[target], aggfunc='count',
+                        margins=True,
+                        margins_name='合计')
+    zb['正样本占比'] = zb[1] / zb['合计']
+    # sb_os = zb
+
+    concat_lis = []
+    if columns_name:
+        for n, i in enumerate(columns_name):
+            sb = pd.pivot_table(df, values='dfid', index=index_col_name, columns=[i], aggfunc='count',
+                                margins=True,
+                                margins_name='合计')
+            sb.drop(columns='合计', inplace=True)
+            concat_lis.append(sb)
+
+    concat_lis.append(zb)
+    sb_os = pd.concat(concat_lis, axis=1)
+    return sb_os
+
+
+def get_pivot_table_posnegasam(df, index_col_name=None, columns_name=None, target='target'):
+    index_col_name = _convert_by(index_col_name)
+    columns_name = _convert_by(columns_name)
+    if target not in df:
+        raise KeyError('数据中目标变量y值名称错误！！！')
+    df['dfid'] = 1
+    concat_lis = []
+    for n, i in enumerate(columns_name):
+        sb = pd.pivot_table(df, values='dfid', index=index_col_name,
+                            columns=[i, target],
+                            aggfunc='count', margins=True, margins_name='合计')
+
+        if n != len(columns_name) - 1:
+            sb.drop(columns='合计', inplace=True)
+
+        concat_lis.append(sb)
+
+        zb = pd.pivot_table(df, values=target, index=index_col_name, columns=[i],
+                            aggfunc=['mean'],
+                            margins=True, margins_name='合计')
+
+        if n != len(columns_name) - 1:
+            zb.drop(columns=('mean', '合计'), inplace=True)
+
+        zb.columns = zb.columns.swaplevel(0, 1)
+        zb.columns = pd.MultiIndex.from_frame(pd.DataFrame(zb.columns.tolist()).replace({'mean': '正样本占比'}))
+
+        concat_lis.append(zb)
+
+    sb_os = pd.concat(concat_lis, axis=1)
+    sb_os.columns = pd.MultiIndex.from_frame(pd.DataFrame(list(sb_os.columns)).replace({'': '样本个数'}))
+    sb_os.columns.names = ['', '']
+    return sb_os
+
+
+def get_mr(original_df, match_df, index_col_name=None, columns_name=None, target='target'):
+    sb_os = get_pivot_table(match_df, index_col_name, columns_name, target)
+
+    ##############分割线
+    ys_sb_os = get_pivot_table(original_df, index_col_name, columns_name, target)
+
+    ###匹配率
+    pp_ratio = sb_os / ys_sb_os
+    del pp_ratio['正样本占比']
+
+    index = [tuple(['匹配样本数', i]) for i in list(sb_os.columns)]
+    sb_os.columns = pd.MultiIndex.from_tuples(index)
+
+    index = [tuple(['原始样本数', i]) for i in list(ys_sb_os.columns)]
+    ys_sb_os.columns = pd.MultiIndex.from_tuples(index)
+
+    index = [tuple(['匹配率', i]) for i in list(pp_ratio.columns)]
+    pp_ratio.columns = pd.MultiIndex.from_tuples(index)
+    # pp_ratio.columns = pp_ratio.columns.map(lambda x: str(x) + '_匹配率')
+
+    tmp = pd.merge(ys_sb_os, sb_os, how='left', left_index=True, right_index=True, suffixes=('_原始', '_匹配'))
+
+    res = pd.merge(pp_ratio, tmp, how='left', left_index=True, right_index=True)
+
+    return res
+
+
+def get_posnegasam_mr(original_df, match_df, index_col_name=None, columns_name=None, target='target'):
+    if not columns_name:
+        return pd.DataFrame()
+        # raise KeyError('columns_name参数是空的！！！调用get_mr函数即可')
+
+    sb_os = get_pivot_table_posnegasam(match_df, index_col_name, columns_name, target)
+
+    #################分割线
+
+    ys_sb_os = get_pivot_table_posnegasam(original_df, index_col_name, columns_name, target)
+
+    ###匹配率
+    pp_ratio = sb_os / ys_sb_os
+    pp_ratio.drop('正样本占比', axis=1, level=1, inplace=True)
+
+    index = [tuple(['匹配样本数'] + list(i)) for i in list(sb_os.columns)]
+    sb_os.columns = pd.MultiIndex.from_tuples(index)
+
+    index = [tuple(['原始样本数'] + list(i)) for i in list(ys_sb_os.columns)]
+    ys_sb_os.columns = pd.MultiIndex.from_tuples(index)
+
+    index = [tuple(['匹配率'] + list(i)) for i in list(pp_ratio.columns)]
+    pp_ratio.columns = pd.MultiIndex.from_tuples(index)
+    pp_ratio.columns = pd.MultiIndex.from_frame(pd.DataFrame(list(pp_ratio.columns)).replace({'样本个数': '总匹配率'}))
+    pp_ratio.columns.names = ['', '', '']
+
+    tmp = pd.merge(ys_sb_os, sb_os, how='left', left_index=True, right_index=True)
+    res = pd.merge(pp_ratio, tmp, how='left', left_index=True, right_index=True)
+    return res
+
+
+def get_model_auc_ks(match_df, index_col_name=None, columns_name=None, target='target', pred='p'):
+    groupby_list = _convert_by(index_col_name)
+    columns_name = _convert_by(columns_name)
+    if target not in match_df:
+        raise KeyError('数据中目标变量y值名称错误！！！')
+    if pred not in match_df:
+        raise KeyError('数据中模型预测的概率值名称错误！！！')
+
+    auc_lis = []
+    ks_lis = []
+    if columns_name:
+        for i in columns_name:
+            # auc
+            try:
+                type_na_device_type_auc = match_df[match_df[target].notnull()].groupby(
+                    groupby_list + [i]).apply(
+                    lambda tmp: pd.Series(
+                        {'auc': get_auc(tmp[target], tmp[pred])}))
+            except:
+                type_na_device_type_auc = match_df[match_df[target].notnull()].groupby(
+                    groupby_list + [i]).apply(
+                    lambda tmp: pd.Series({'auc': 0}))
+            auc_lis.append(type_na_device_type_auc.unstack())
+
+            # ks
+            try:
+                type_na_device_type_ks = match_df[match_df[target].notnull()].groupby(
+                    groupby_list + [i]).apply(
+                    lambda tmp: pd.Series({'ks': get_ks(tmp[target], tmp[pred])}))
+            except:
+                type_na_device_type_ks = match_df[match_df[target].notnull()].groupby(
+                    groupby_list + [i]).apply(
+                    lambda tmp: pd.Series({'ks': 0}))
+
+            ks_lis.append(type_na_device_type_ks.unstack())
+
+    ###auc
+    try:
+        type_na_auc = match_df[match_df[target].notnull()].groupby(groupby_list).apply(
+            lambda tmp: pd.Series({'auc': get_auc(tmp[target], tmp[pred])}))
+        index = pd.MultiIndex.from_tuples([('auc', 'all')])
+    except:
+        type_na_auc = match_df[match_df[target].notnull()].groupby(groupby_list).apply(
+            lambda tmp: pd.Series({'auc': 0}))
+        index = pd.MultiIndex.from_tuples([('auc', 'all')])
+    type_na_auc.columns = index
+
+    auc_lis.append(type_na_auc)
+
+    datatype_didtype_auc = pd.concat(auc_lis, axis=1)
+
+    ###ks
+    try:
+        type_na_ks = match_df[match_df[target].notnull()].groupby(groupby_list).apply(
+            lambda tmp: pd.Series({'ks': get_ks(tmp[target], tmp[pred])}))
+        index = pd.MultiIndex.from_tuples([('ks', 'all')])
+    except:
+        type_na_ks = match_df[match_df[target].notnull()].groupby(groupby_list).apply(
+            lambda tmp: pd.Series({'ks': 0}))
+        index = pd.MultiIndex.from_tuples([('ks', 'all')])
+    type_na_ks.columns = index
+
+    ks_lis.append(type_na_ks)
+
+    datatype_didtype_ks = pd.concat(ks_lis, axis=1)
+
+    datatype_didtype_auc_ks = pd.concat([datatype_didtype_auc, datatype_didtype_ks], axis=1)
+    return datatype_didtype_auc_ks
+
+
+class StatisticsMrAucKs:
+
+    def __init__(self, conf_dict={}, data_path=''):
+        self.cust_id = conf_dict.get('cust_id', 'device_id')  # 主键
+        self.target_na = conf_dict.get('target_na', 'target')  # 目标变量列名
+        self.device_type_na = conf_dict.get('device_type_na', 'device_type')  # 设备列名
+        self.year_month_na = conf_dict.get('year_month_na', 'apply_month')
+        self.date_na = conf_dict.get('date_na', 'apply_time')  # 时间列名
+        self.type_na = conf_dict.get('type_na', 'type')  # 数据集列名
+        self.model_pred_res = conf_dict.get('model_pred_res', 'p')  # 模型预测值
+
+        ###设备号列名
+        self.oaid_col_na = conf_dict.get('oaid_col_na', 'oaid_md5')
+        self.imei_col_na = conf_dict.get('imei_col_na', 'imei_md5')
+        self.idfa_col_na = conf_dict.get('idfa_col_na', 'idfa_md5')
+
+        ###设备号的具体取值
+        self.oaid_value = conf_dict.get('oaid_value', 'oaid')
+        self.imei_value = conf_dict.get('imei_value', 'imei')
+        self.idfa_value = conf_dict.get('idfa_value', 'idfa')
+
+        self.data_path = data_path
+
+    def statistics_model_mr_auc_ks(self, by_cols=['device_type', 'os', 'media']):
+        model_res = pd.read_csv(self.data_path)
+
+        model_res[self.year_month_na] = model_res[self.date_na].map(lambda x: x[:7])
+
+        model_res[self.device_type_na] = model_res[self.device_type_na].replace(
+            {0: self.oaid_value, 1: self.imei_value, 2: self.idfa_value})
+
+
+        p_null = model_res[model_res[self.model_pred_res].isnull()]
+
+        if len(p_null[p_null[self.device_type_na].isnull()]) > 0:
+
+            print("device_type有为空！！！")
+            mdn_oaid = p_null[p_null[self.oaid_col_na].notnull()].rename(columns={self.oaid_col_na: 'device_id'})
+            mdn_imei = p_null[p_null[self.imei_col_na].notnull()].rename(columns={self.imei_col_na: 'device_id'})
+            mdn_idfa = p_null[p_null[self.idfa_col_na].notnull()].rename(columns={self.idfa_col_na: 'device_id'})
+
+            mdn_oaid[self.device_type_na] = 0  # 0,oaid
+            mdn_imei[self.device_type_na] = 1  # 1,imei
+            mdn_idfa[self.device_type_na] = 2  # 2,idfa
+            p_null_did = mdn_oaid.append(mdn_imei).append(mdn_idfa)
+
+            p_null_did = p_null_did.sort_values([self.device_type_na]).drop_duplicates([self.cust_id],
+                                                                                       keep='first')  # first是取0(oaid)、1(imei)、2(idfa)
+            del p_null_did['device_id']
+
+            p_null_did[self.device_type_na] = p_null_did[self.device_type_na].replace(
+                {0: self.oaid_value, 1: self.imei_value, 2: self.idfa_value})
+
+            model_res = model_res[model_res[self.model_pred_res].notnull()].append(p_null_did)
+
+        model_res['os'] = model_res[self.device_type_na].replace(
+            {self.oaid_value: 'android', self.imei_value: 'android', self.idfa_value: 'ios'})
+
+        print('总：', model_res.shape)
+        print('没有p值的：', p_null.shape)
+        p_notnull = model_res[model_res[self.model_pred_res].notnull()]
+        print('有p值的：', p_notnull.shape)
+
+        file_name = self.data_path.split('.csv')[0] + '_模型mr_auc_ks_res——new.xlsx'
+
+        writer = pd.ExcelWriter(file_name)
+
+        ###不同数据集_不同设备的匹配率
+
+        res = get_mr(model_res, p_notnull, self.type_na, by_cols)
+        print('1.1、不同集匹配率')
+        display(res)
+
+        start_row = 1
+        res.to_excel(writer, sheet_name='1、匹配详情', startrow=start_row)  # 指定从哪一行开始写入数据，默认值为0
+        # 修改下一次开始写入数据的行位置
+        start_row = start_row + res.shape[0] + 4
+
+        ###不同月份_不同设备的匹配率
+
+        res = get_mr(model_res, p_notnull, self.year_month_na, by_cols)
+        print('1.2、不同月份匹配率')
+        display(res)
+
+        res.to_excel(writer, sheet_name='1、匹配详情', startrow=start_row)
+        start_row = start_row + res.shape[0] + 5
+
+        ###正负样本不同数据集_不同设备的匹配率
+
+        res = get_posnegasam_mr(model_res, p_notnull, self.type_na, by_cols)
+        print('1.3、不同集、不同设备匹配率')
+        display(res)
+
+        res.to_excel(writer, sheet_name='1、匹配详情', startrow=start_row)
+        start_row = start_row + res.shape[0] + 5
+
+        res = get_posnegasam_mr(model_res, p_notnull, self.year_month_na, by_cols)
+        print('1.4、不同月份、不同设备匹配率')
+        display(res)
+
+        res.to_excel(writer, sheet_name='1、匹配详情', startrow=start_row)
+
+        ### 效果统计
+
+        ### 不同集
+
+        res = get_model_auc_ks(p_notnull, self.type_na, by_cols)
+        print('2.1、不同集效果')
+        display(res)
+
+        start_row = 1
+        res.to_excel(writer, sheet_name='2、模型效果详情', startrow=start_row)
+        start_row = start_row + res.shape[0] + 4
+
+        ### 不同月份
+
+        res = get_model_auc_ks(p_notnull, self.year_month_na, by_cols)
+        print('2.2、不同月份效果')
+        display(res)
+
+        res.to_excel(writer, sheet_name='2、模型效果详情', startrow=start_row)
+        start_row = start_row + res.shape[0] + 4
+
+        ### 不同集上不同月份
+
+        res = get_model_auc_ks(p_notnull, [self.type_na, self.year_month_na], by_cols)
+        print('2.3、不同集、月份效果')
+        display(res)
+
+        res.to_excel(writer, sheet_name='2、模型效果详情', startrow=start_row)
+
+        # # 不同集上不同月份
+
+        # # 效果统计结束
+
+        writer.save()
+        writer.close()
