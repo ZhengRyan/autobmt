@@ -30,7 +30,7 @@ conf_dict = {
         'idfa_value': 'idfa',
     }
 
-data_path = '/Users/ryanzheng/td/项目/RTA/拍拍贷RTA/模型/R8431/TD84p31_oneid_v2_all_rowdrop_to_statistics_mr_auc_ks.csv'
+data_path = '/Users/ryanzheng/td/项目/RTA/pddRTA/模型/R8431/TD84p31_oneid_v2_all_rowdrop_to_statistics_mr_auc_ks.csv'
 smak = StatisticsMrAucKs(conf_dict, data_path)
 smak.statistics_model_mr_auc_ks()
 
