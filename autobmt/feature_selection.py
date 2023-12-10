@@ -10,6 +10,7 @@
 
 import numpy as np
 import pandas as pd
+from joblib import Parallel, delayed
 import shap
 from tqdm import tqdm
 from xgboost import XGBClassifier
@@ -145,20 +146,20 @@ def select_features_by_psi(base, no_base, target='target', threshold=0.05, inclu
         log.info('未进行分箱计算的psi')
         psi_series = psi(no_base[cols], base[cols])
     else:
+        to_bin_cols = []
         if isinstance(feature_bin, FeatureBin):
-            for i in cols:  # TODO 待优化，考虑多线程
-                if i not in feature_bin.splits_dict:
-                    t = base[i]
-                    if is_continuous(t):
-                        feature_bin.fit(t, base[target], is_need_monotonic=False)
-        else:
-            feature_bin = FeatureBin()
-            to_bin_cols = []
-            for i in cols:  # TODO 待优化，考虑多线程
+            for i in cols:
                 if is_continuous(base[i]):
                     to_bin_cols.append(i)
-
-            feature_bin.fit(base[to_bin_cols], base[target], is_need_monotonic=False)
+            if feature_bin.splits_dict:
+                to_bin_cols = list(set(to_bin_cols) - set(feature_bin.splits_dict.keys()))
+        else:
+            feature_bin = FeatureBin()
+            for i in cols:
+                if is_continuous(base[i]):
+                    to_bin_cols.append(i)
+        if to_bin_cols:
+            feature_bin.fit(base[to_bin_cols], base[target], update=False, method='dt', is_need_monotonic=False)
 
         psi_series = psi(feature_bin.transform(no_base[cols]), feature_bin.transform(base[cols]))
 
@@ -181,7 +182,8 @@ def select_features_by_psi(base, no_base, target='target', threshold=0.05, inclu
     return unpack_tuple(res)
 
 
-def select_features_by_iv(df, target='target', threshold=0.02, include_cols=[], return_drop=False, return_iv=False,
+def select_features_by_iv(df, target='target', threshold=0.02, cpu_cores=-1, include_cols=[], return_drop=False,
+                          return_iv=False,
                           only_return_drop=False, if_select_flow=False, feature_bin=None):
     """
     通过iv筛选特征
@@ -205,9 +207,10 @@ def select_features_by_iv(df, target='target', threshold=0.02, include_cols=[], 
     else:
         cols = np.array(df.columns)
 
-    iv = np.zeros(len(cols))
-    for i in range(len(cols)):
-        iv[i] = calc_iv(df[cols[i]], df[target], feature_bin=feature_bin)  # 使用和select_features_by_iv_diff一样的逻辑
+    iv_l = Parallel(n_jobs=cpu_cores, backend='threading')(
+        delayed(calc_iv)(df[cols[i]], df[target], feature_bin=feature_bin) for i in range(len(cols))
+    )
+    iv = np.array(iv_l)
 
     drop_index = np.where(iv < threshold)
 
@@ -296,7 +299,8 @@ def select_features_by_iv_diff(dev, no_dev, target='target', threshold=2, includ
     return unpack_tuple(res)
 
 
-def select_features_by_corr(df, target='target', by='IV', threshold=0.7, include_cols=[], return_drop=False,
+def select_features_by_corr(df, target='target', by='IV', threshold=0.7, cpu_cores=-1, include_cols=[],
+                            return_drop=False,
                             only_return_drop=False, if_select_flow=False, feature_bin=None):
     """
     通过通过相关性筛选特征
@@ -337,9 +341,11 @@ def select_features_by_corr(df, target='target', by='IV', threshold=0.7, include
         if len(ix):
             gt_thre = np.unique(np.concatenate((ix, cn)))
             gt_thre_cols = df_corr.index[gt_thre]
-            iv = {}
-            for i in gt_thre_cols:
-                iv[i] = calc_iv(df[i], target=df[target], feature_bin=feature_bin)
+            iv_t = Parallel(n_jobs=cpu_cores, backend='threading')(
+                delayed(calc_iv)(df[i], df[target], feature_bin=feature_bin, return_name=True, col_name=i) for i in
+                gt_thre_cols
+            )
+            iv = dict(iv_t)
 
             by = pd.Series(iv, index=gt_thre_cols)
 
@@ -450,7 +456,7 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
         'learning_rate': params.get('learning_rate', 0.05),
         'n_estimators': params.get('n_estimators', 200),
         'max_depth': params.get('max_depth', 3),
-        #'min_child_weight': params.get('min_child_weight', max(round(len(dev_data) * 0.01), 50)),
+        # 'min_child_weight': params.get('min_child_weight', max(round(len(dev_data) * 0.01), 50)),
         'min_child_weight': params.get('min_child_weight', 5),
         'subsample': params.get('subsample', 0.7),
         'colsample_bytree': params.get('colsample_bytree', 0.9),
@@ -487,7 +493,8 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
         log.info('*' * 50 + 'feature_importance筛选变量' + '*' * 50)
 
     if corr_threhold:
-        _, del_fea_list = select_features_by_corr(dev_data[fea_names], by=fea_weight, threshold=corr_threhold,return_drop=True)
+        _, del_fea_list = select_features_by_corr(dev_data[fea_names], by=fea_weight, threshold=corr_threhold,
+                                                  return_drop=True)
         log.info('相关性阈值: {}'.format(corr_threhold))
         log.info('相关性剔除的变量个数: {}'.format(len(del_fea_list)))
         fea_names = [i for i in fea_names if i not in del_fea_list]
@@ -510,7 +517,7 @@ def feature_select(datasets, fea_names, target, feature_select_method='shap', me
     return fea_names
 
 
-def stepwise_del_feature(model , datasets, fea_names, target, params={}):
+def stepwise_del_feature(model, datasets, fea_names, target, params={}):
     '''
 
     Args:
@@ -538,7 +545,7 @@ def stepwise_del_feature(model , datasets, fea_names, target, params={}):
     #     'reg_lambda': params.get('reg_lambda', 10)
     # }
 
-    #xgb_clf = XGBClassifier(**stepwise_del_params)
+    # xgb_clf = XGBClassifier(**stepwise_del_params)
     model.fit(dev_data[fea_names], dev_data[target])
 
     pred_test = model.predict_proba(nodev_data[fea_names])[:, 1]

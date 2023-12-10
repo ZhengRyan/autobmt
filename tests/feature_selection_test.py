@@ -303,3 +303,50 @@ def test_select_features_by_corr():
 # import sys
 #
 # sys.exit(0)
+
+
+import pandas as pd
+data = pd.read_csv('/Users/ryanzheng/PycharmProjects/autobmt/examples/example_data/tutorial_data.csv')
+print('Shape:',data.shape)
+print(data.head(10))
+
+train = data[data['type']=='train']
+test = data[data['type']=='test']
+
+from autobmt.feature_selection import select_features_by_psi, select_features_by_iv, select_features_by_corr
+from autobmt.transformer import FeatureBin
+
+# fb = FeatureBin()
+# #fb.fit(train[['var_d2','var_b11']], train['target'], method='dt', is_need_monotonic=False)
+# fb.fit(train[['var_d2','var_b11']], train['target'], is_need_monotonic=False)
+# print(len(set(train['var_d2'])))
+# print(len(set(train['var_b11'])))
+# print(fb.splits_dict)
+# del_c, th, fea_value_df = select_features_by_psi(train,test, if_select_flow=True, feature_bin=fb)
+# fea_value_df.to_csv('/Users/ryanzheng/tmp/test_autobmt/psipsi3333外chi.csv', index=False)
+# fb.export(to_csv='/Users/ryanzheng/tmp/test_autobmt/psi_feature_bin=fb11111++1111+111111_分箱error.csv')
+
+# fb = FeatureBin()
+# #fb.fit(train[['var_d2','var_b11']], train['target'], is_need_monotonic=False)
+# fb.fit(train[['var_d2','var_b11']], train['target'], method='dt', is_need_monotonic=False)
+# print(len(set(train['var_d2'])))
+# print(len(set(train['var_b11'])))
+# print(fb.splits_dict)
+# del_c, th, fea_value_df = select_features_by_iv(train, include_cols=list(set(train.columns)-set(['APP_ID_C','target','type','apply_time'])), if_select_flow=True, feature_bin=fb)
+# fea_value_df.to_csv('/Users/ryanzheng/tmp/test_autobmt/iv_feature_bin=fb_dt多线程.csv', index=False)
+# fb.export(to_csv='/Users/ryanzheng/tmp/test_autobmt/iv_feature_bin=fb_dt_分箱多线程.csv')
+
+
+fb = FeatureBin()
+#fb.fit(train[['var_d2','var_b11']], train['target'], is_need_monotonic=False)
+fb.fit(train[['var_d2','var_b11']], train['target'], method='dt', is_need_monotonic=False)
+print(len(set(train['var_d2'])))
+print(len(set(train['var_b11'])))
+print(fb.splits_dict)
+del_c, th, fea_value_df = select_features_by_corr(train, include_cols=list(set(train.columns)-set(['APP_ID_C','target','type','apply_time'])), if_select_flow=True, feature_bin=fb)
+print(del_c)
+# fea_value_df.to_csv('/Users/ryanzheng/tmp/test_autobmt/select_features_by_corr_iv.csv', index=False)
+# fb.export(to_csv='/Users/ryanzheng/tmp/test_autobmt/select_features_by_corr_iv_分箱.csv')
+fea_value_df.to_csv('/Users/ryanzheng/tmp/test_autobmt/select_features_by_corr_iv多线程dt2222.csv', index=False)
+fb.export(to_csv='/Users/ryanzheng/tmp/test_autobmt/select_features_by_corr_iv_分箱多线程dt2222.csv')
+

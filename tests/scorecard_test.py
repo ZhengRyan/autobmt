@@ -31,8 +31,6 @@ df = pd.DataFrame({
     'D': np.ones(500),
 })
 
-df.to_csv('/Users/ryanzheng/PycharmProjects/autoscorecard/tests/genrate_data.csv', index=False)
-
 card_config = {
     'A': {
         '[-inf ~ 3)': 100,

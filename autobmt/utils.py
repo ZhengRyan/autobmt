@@ -486,21 +486,22 @@ def fea_woe_dict_format(fea_woe_dict, splits_dict):
 ###################
 
 def save_json(res_dict, file, indent=4):
-    """
-    保存成json文件
-    Args:
-        res_dict (dict): 需要保存的内容
-        file (str|IOBase): 保存后的文件
-        indent (int): json文件格式化缩进
 
-    Returns:
-
-    """
-    if isinstance(file, str):
-        file = open(file, 'w')
-
-    with file as f:
-        json.dump(res_dict, f, ensure_ascii=False, indent=indent)
+    try:
+        if isinstance(file, str):
+            file = open(file, 'w')
+        json.dump(res_dict, file, ensure_ascii=False, indent=indent)
+        file.close()
+    except:
+        if isinstance(file, str):
+            file = open(file, 'r+')
+        file.seek(0)
+        file.truncate()
+        res_dict_ = {}
+        for key, value in res_dict.items():
+            res_dict_[key] = {int(k): v for k, v in value.items()}
+        json.dump(res_dict_, file, ensure_ascii=False, indent=indent)
+        file.close()
 
 
 def load_json(file):

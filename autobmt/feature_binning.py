@@ -431,12 +431,13 @@ def bin_method_run(feature, target=None, method='dt', return_bin=False, **kwargs
     ##返回splits
     if return_bin:
         bins = np.zeros(len(feature))
-        if np.isnan(splits[-1]):
-            mask = pd.isna(feature)
-            bins[~mask] = split_points_to_bin(feature[~mask], splits[:-1])
-            bins[mask] = len(splits)
-        else:
-            bins = split_points_to_bin(feature, splits)
+        if len(splits):
+            if np.isnan(splits[-1]):
+                mask = pd.isna(feature)
+                bins[~mask] = split_points_to_bin(feature[~mask], splits[:-1])
+                bins[mask] = len(splits)
+            else:
+                bins = split_points_to_bin(feature, splits)
 
         # return splits, pd.Series(bins, name=feature.name)
         return splits, bins

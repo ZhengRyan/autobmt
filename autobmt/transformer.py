@@ -85,7 +85,7 @@ class FeatureBin(TransformerMixin):
 
     @df_exclude_cols
     @df_select_dtypes
-    def fit(self, X, y, **kwargs):
+    def fit(self, X, y, update = False, **kwargs):
         """
         分箱
         Args:
@@ -117,7 +117,10 @@ class FeatureBin(TransformerMixin):
         data = Parallel(n_jobs=self.n_jobs)(
             delayed(self._fit)(X[col], y, **kwargs) for col in X)  # 批量处理
 
-        self.splits_dict = dict(data)
+        if update:
+            self.splits_dict.update(dict(data))
+        else:
+            self.splits_dict = dict(data)
 
         return self
 
@@ -421,9 +424,7 @@ class FeatureBin(TransformerMixin):
             # splits = {k: self.splits_point_format(v, index=False).tolist() for k, v in splits.items()}
             splits = {k: list(self.splits_point_format(v, index=index)) for k, v in splits.items()}
         else:
-            splits = {k: list(v.astype(float)) if np.issubdtype(v.dtype, np.number) else [','.join(i) for i in v] for
-                      k, v in
-                      splits.items()}
+            splits = {k: v.tolist() for k, v in splits.items()}
         if to_json is not None:
             save_json(splits, to_json)
 
@@ -471,7 +472,7 @@ class WoeTransformer(TransformerMixin):
 
     @df_exclude_cols
     @df_select_dtypes
-    def fit(self, X, y):
+    def fit(self, X, y, update = False):
         """
         woe转换
         Args:
@@ -497,7 +498,10 @@ class WoeTransformer(TransformerMixin):
         data = Parallel(n_jobs=self.n_jobs)(
             delayed(self._fit_woe)(X[col], y) for col in X)  # 批量处理
 
-        self.fea_woe_dict = dict(data)
+        if update:
+            self.fea_woe_dict.update(dict(data))
+        else:
+            self.fea_woe_dict = dict(data)
 
         return self
 
@@ -656,7 +660,7 @@ class WoeTransformer(TransformerMixin):
             fea_bin_woe = var_bin_woe
         else:
             fea_bin_woe = copy.deepcopy(self.fea_woe_dict)
-            fea_bin_woe = {k: {int(i): j for i, j in v.items()} for k, v in fea_bin_woe.items()}
+            #fea_bin_woe = {k: {int(i): j for i, j in v.items()} for k, v in fea_bin_woe.items()}
         if to_json is not None:
             save_json(fea_bin_woe, to_json)
 

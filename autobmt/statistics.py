@@ -398,7 +398,7 @@ def _IV(feature, target):
 
 
 @support_dataframe()
-def calc_iv(feature, target, feature_bin=None, **kwargs):
+def calc_iv(feature, target, feature_bin=None, return_name=False, col_name='feature', **kwargs):
     """计算1个特征的IV值
 
     Args:
@@ -421,8 +421,10 @@ def calc_iv(feature, target, feature_bin=None, **kwargs):
         else:
             if 'return_bin' in kwargs: del kwargs['return_bin']
             s, feature = autobmt.bin_method_run(feature, target, return_bin=True, is_need_monotonic=False, **kwargs)
-
-    return _IV(feature, target)
+    if return_name:
+        return col_name, _IV(feature, target)
+    else:
+        return _IV(feature, target)
 
 
 def bin_badrate(feature, target=None):
@@ -796,11 +798,9 @@ class StatisticsMrAucKs:
         model_res[self.device_type_na] = model_res[self.device_type_na].replace(
             {0: self.oaid_value, 1: self.imei_value, 2: self.idfa_value})
 
-
         p_null = model_res[model_res[self.model_pred_res].isnull()]
 
         if len(p_null[p_null[self.device_type_na].isnull()]) > 0:
-
             print("device_type有为空！！！")
             mdn_oaid = p_null[p_null[self.oaid_col_na].notnull()].rename(columns={self.oaid_col_na: 'device_id'})
             mdn_imei = p_null[p_null[self.imei_col_na].notnull()].rename(columns={self.imei_col_na: 'device_id'})

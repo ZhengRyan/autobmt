@@ -31,8 +31,6 @@ df = pd.DataFrame({
     'target': target,
 })
 
-df.to_csv('/Users/ryanzheng/PycharmProjects/autoscorecard/tests/genrate_data.csv', index=False)
-
 
 def test_duplicated_keys():
     dup_df = df.rename(columns={"C": "A"})
