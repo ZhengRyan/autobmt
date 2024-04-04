@@ -10,7 +10,7 @@
 
 > 仓库地址：https://github.com/ZhengRyan/autobmt
 > 
-> 微信公众号文章：https://mp.weixin.qq.com/s/u8Nsp5M93WIGL2M0tU4U_g
+> 微信公众号文章：https://mp.weixin.qq.com/s/30-V0p30p1rKSBtcBgLTRA
 > 
 > pipy包：https://pypi.org/project/autobmt/
 > 

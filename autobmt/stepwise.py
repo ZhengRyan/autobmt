@@ -23,7 +23,6 @@ from .utils import split_target, unpack_tuple, step_evaluate_models, \
 INTERCEPT_COLS = 'intercept'
 
 warnings.filterwarnings(action='ignore')
-pd.set_option('display.max_columns', None)
 log = Logger(level="info", name=__name__).logger
 
 

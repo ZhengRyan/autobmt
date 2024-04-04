@@ -22,5 +22,5 @@ from .scorecard import ScoreCard
 from .bayes_opt_tuner import classifiers_model_auto_tune_params
 from .plot import plot_var_bin_summary
 
-__version__ = "0.1.9"
+__version__ = "0.2.0"
 VERSION = __version__

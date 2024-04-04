@@ -558,8 +558,6 @@ import warnings
 is_scalar = lib.is_scalar
 
 warnings.filterwarnings('ignore')
-pd.set_option('display.max_rows', None)  # 设置行数为无限制
-pd.set_option('display.max_columns', None)  # 设置列数为无限制
 
 
 def _convert_by(by):
